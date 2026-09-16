@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { MeterPage } from "@/components/meter-page";
 
 export type Section = "today" | "calendar" | "devices" | "meter" | "reconciliation" | "analytics" | "settings";
 
@@ -53,7 +54,7 @@ function DevicesPage() {
 
 const initialReadings = [["15.09.2026", "15:00", "15 842,200", "—"], ["15.09.2026", "10:00", "15 810,400", "31,800 / 5 часов"], ["15.09.2026", "00:00", "15 748,000", "62,400 / 10 часов"], ["14.09.2026", "00:00", "15 628,000", "120,000 / 24 часа"]];
 
-function MeterPage() {
+function LegacyMeterPage() {
   const [rows, setRows] = useState(initialReadings);
   const [dialogOpen, setDialogOpen] = useState(false);
   const latest = rows[0];
