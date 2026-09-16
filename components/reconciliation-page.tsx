@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { AlertCircle, Calculator, CheckCircle2, ChevronRight } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -36,21 +36,28 @@ export function ReconciliationPage() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [selected, setSelected] = useState<Row | null>(null);
+  const requestId = useRef(0);
 
   const load = useCallback(async (persist = false) => {
+    const currentRequest = ++requestId.current;
     persist ? setSaving(true) : setLoading(true);
     setError("");
+    if (!persist) setNotice("");
     try {
       const response = await fetch(`/api/reconciliation?from=${from}&to=${to}`, { method: persist ? "POST" : "GET", cache: "no-store" });
       const body = await response.json() as Reconciliation & { error?: { message?: string } };
       if (!response.ok) throw new Error(body.error?.message || "Не удалось выполнить расчёт");
-      setData(body);
-      if (persist) setNotice(`Пересчёт ${from} — ${to} сохранён по каждому часу.`);
+      if (currentRequest === requestId.current) {
+        setData(body);
+        if (persist) setNotice(`Пересчёт ${from} — ${to} сохранён по каждому часу.`);
+      }
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Не удалось выполнить расчёт");
+      if (currentRequest === requestId.current) setError(requestError instanceof Error ? requestError.message : "Не удалось выполнить расчёт");
     } finally {
-      setLoading(false);
-      setSaving(false);
+      if (currentRequest === requestId.current) {
+        setLoading(false);
+        setSaving(false);
+      }
     }
   }, [from, to]);
 
