@@ -61,7 +61,10 @@ export function ReconciliationPage() {
     }
   }, [from, to]);
 
-  useEffect(() => { void load(false); }, [load]);
+  useEffect(() => {
+    const timeout = window.setTimeout(() => void load(false), 300);
+    return () => window.clearTimeout(timeout);
+  }, [load]);
   const summary = data?.summary ?? { actualKwh: "0", devicesKwh: "0", deltaKwh: "0", coveragePercent: 0 };
 
   return <>
