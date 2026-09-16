@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import {
   Activity,
   AlertTriangle,
@@ -78,13 +79,13 @@ const weekData = [
 ];
 
 const navItems = [
-  { label: "Главная", icon: LayoutDashboard, active: true },
-  { label: "Сегодня", icon: Clock3 },
-  { label: "Календарь", icon: CalendarDays },
-  { label: "Приборы", icon: Lightbulb },
-  { label: "Счётчик", icon: Gauge },
-  { label: "Сверка", icon: SlidersHorizontal },
-  { label: "Аналитика", icon: BarChart3 },
+  { label: "Главная", icon: LayoutDashboard, href: "/", active: true },
+  { label: "Сегодня", icon: Clock3, href: "/today" },
+  { label: "Календарь", icon: CalendarDays, href: "/calendar" },
+  { label: "Приборы", icon: Lightbulb, href: "/devices" },
+  { label: "Счётчик", icon: Gauge, href: "/meter" },
+  { label: "Сверка", icon: SlidersHorizontal, href: "/reconciliation" },
+  { label: "Аналитика", icon: BarChart3, href: "/analytics" },
 ];
 
 const metrics = [
@@ -180,8 +181,8 @@ export default function Home() {
               <SidebarMenu>
                 {navItems.map((item) => (
                   <SidebarMenuItem key={item.label}>
-                    <SidebarMenuButton isActive={item.active} tooltip={item.label} className="h-10 rounded-xl px-3 text-[0.9rem] text-white/64 hover:bg-white/8 hover:text-white data-[active=true]:bg-[#f0b84c] data-[active=true]:font-semibold data-[active=true]:text-[#10283b]">
-                      <item.icon aria-hidden="true" size={18} /><span>{item.label}</span>
+                    <SidebarMenuButton asChild isActive={item.active} tooltip={item.label} className="h-10 rounded-xl px-3 text-[0.9rem] text-white/64 hover:bg-white/8 hover:text-white data-[active=true]:bg-[#f0b84c] data-[active=true]:font-semibold data-[active=true]:text-[#10283b]">
+                      <Link href={item.href}><item.icon aria-hidden="true" size={18} /><span>{item.label}</span></Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 ))}
@@ -190,7 +191,7 @@ export default function Home() {
           </SidebarGroup>
           <SidebarGroup className="mt-3">
             <SidebarGroupLabel className="px-3 text-[0.68rem] uppercase tracking-[0.14em] text-white/35">Система</SidebarGroupLabel>
-            <SidebarGroupContent><SidebarMenu><SidebarMenuItem><SidebarMenuButton tooltip="Настройки" className="h-10 rounded-xl px-3 text-[0.9rem] text-white/64 hover:bg-white/8 hover:text-white"><Settings aria-hidden="true" size={18} /><span>Настройки</span></SidebarMenuButton></SidebarMenuItem></SidebarMenu></SidebarGroupContent>
+            <SidebarGroupContent><SidebarMenu><SidebarMenuItem><SidebarMenuButton asChild tooltip="Настройки" className="h-10 rounded-xl px-3 text-[0.9rem] text-white/64 hover:bg-white/8 hover:text-white"><Link href="/settings"><Settings aria-hidden="true" size={18} /><span>Настройки</span></Link></SidebarMenuButton></SidebarMenuItem></SidebarMenu></SidebarGroupContent>
           </SidebarGroup>
         </SidebarContent>
         <SidebarFooter className="px-4 pb-5">
