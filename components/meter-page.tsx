@@ -34,6 +34,16 @@ type IntervalData = {
   hours: IntervalHour[];
 };
 
+type ReadingPreview = {
+  previous: MeterReading | null;
+  next: MeterReading | null;
+  intervals: {
+    before: { hours: number; consumptionKwh: string } | null;
+    after: { hours: number; consumptionKwh: string } | null;
+  };
+  affected: { from: { date: string; hour: number }; to: { date: string; hour: number } };
+};
+
 const fieldClass = "h-11 rounded-xl border border-[#d8e3e7] bg-white px-3 text-sm text-[#17374c] outline-none focus:border-[#1e7680]";
 
 function formatKwh(value: string | number) {
@@ -42,6 +52,15 @@ function formatKwh(value: string | number) {
 
 function formatDate(date: string) {
   return new Intl.DateTimeFormat("ru-RU").format(new Date(`${date}T12:00:00Z`));
+}
+
+function ReadingPreviewPanel({ preview }: { preview: ReadingPreview }) {
+  const reading = (value: MeterReading | null) => value ? `${formatDate(value.date)}, ${String(value.hour).padStart(2, "0")}:00 · ${formatKwh(value.valueKwh)} кВт⋅ч` : "Граница отсутствует";
+  return <div className="grid gap-3 rounded-2xl border border-[#dce7ea] bg-[#f7fafb] p-4">
+    <div className="grid gap-3 sm:grid-cols-2"><div><p className="eyebrow">Предыдущее показание</p><p className="mt-1 text-sm font-medium text-[#17374c]">{reading(preview.previous)}</p></div><div><p className="eyebrow">Следующее показание</p><p className="mt-1 text-sm font-medium text-[#17374c]">{reading(preview.next)}</p></div></div>
+    <div className="grid gap-3 border-t border-[#dce7ea] pt-3 sm:grid-cols-2"><div><p className="eyebrow">Интервал до нового</p><p className="mt-1 text-sm text-[#536d7b]">{preview.intervals.before ? `${formatKwh(preview.intervals.before.consumptionKwh)} кВт⋅ч за ${preview.intervals.before.hours} ч` : "Нет левой границы — факт будет MISSING"}</p></div><div><p className="eyebrow">Интервал после нового</p><p className="mt-1 text-sm text-[#536d7b]">{preview.intervals.after ? `${formatKwh(preview.intervals.after.consumptionKwh)} кВт⋅ч за ${preview.intervals.after.hours} ч` : "Нет правой границы — факт будет MISSING"}</p></div></div>
+    <p className="rounded-xl bg-white px-3 py-2 text-sm text-[#536d7b]">Диапазон пересчёта: {formatDate(preview.affected.from.date)} {String(preview.affected.from.hour).padStart(2, "0")}:00 — {formatDate(preview.affected.to.date)} {String(preview.affected.to.hour).padStart(2, "0")}:00</p>
+  </div>;
 }
 
 function hoursBetween(left: MeterReading, right: MeterReading) {
@@ -57,6 +76,8 @@ async function readJson<T>(response: Response): Promise<T> {
 }
 
 export function MeterPage() {
+  const defaultReadingDate = new Intl.DateTimeFormat("en-CA").format(new Date());
+  const defaultReadingHour = new Date().getHours();
   const [readings, setReadings] = useState<MeterReading[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -71,8 +92,12 @@ export function MeterPage() {
   const [selectedHour, setSelectedHour] = useState<IntervalHour | null>(null);
   const [manualValue, setManualValue] = useState("");
   const [manualComment, setManualComment] = useState("");
-  const defaultReadingDate = new Intl.DateTimeFormat("en-CA").format(new Date());
-  const defaultReadingHour = new Date().getHours();
+  const [addDate, setAddDate] = useState(defaultReadingDate);
+  const [addHour, setAddHour] = useState(defaultReadingHour);
+  const [addValue, setAddValue] = useState("");
+  const [preview, setPreview] = useState<ReadingPreview | null>(null);
+  const [previewError, setPreviewError] = useState("");
+  const [previewLoading, setPreviewLoading] = useState(false);
 
   const loadReadings = useCallback(async () => {
     setLoading(true);
@@ -89,6 +114,25 @@ export function MeterPage() {
   }, []);
 
   useEffect(() => { void loadReadings(); }, [loadReadings]);
+
+  useEffect(() => {
+    if (!addOpen || !addValue.trim()) { setPreview(null); setPreviewError(""); return; }
+    const controller = new AbortController();
+    const timeout = window.setTimeout(async () => {
+      setPreviewLoading(true);
+      setPreviewError("");
+      try {
+        const response = await fetch("/api/meter-readings/preview", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ date: addDate, hour: addHour, valueKwh: addValue }), signal: controller.signal });
+        const data = await readJson<ReadingPreview>(response);
+        setPreview(data);
+      } catch (requestError) {
+        if (!controller.signal.aborted) { setPreview(null); setPreviewError(requestError instanceof Error ? requestError.message : "Не удалось проверить показание"); }
+      } finally {
+        if (!controller.signal.aborted) setPreviewLoading(false);
+      }
+    }, 300);
+    return () => { window.clearTimeout(timeout); controller.abort(); };
+  }, [addDate, addHour, addOpen, addValue]);
 
   const latest = readings[0];
   const currentDayConsumption = useMemo(() => {
@@ -114,6 +158,9 @@ export function MeterPage() {
       setAddOpen(false);
       setNotice("Показание сохранено. Затронутые интервалы обновлены.");
       form.reset();
+      setAddValue("");
+      setPreview(null);
+      setPreviewError("");
       await loadReadings();
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Не удалось сохранить показание");
@@ -234,7 +281,16 @@ export function MeterPage() {
       {loading ? <div className="p-8 text-center text-sm text-[#718590]">Загрузка показаний…</div> : readings.length === 0 ? <div className="p-8 text-center"><p className="font-medium text-[#17374c]">Показаний пока нет</p><p className="mt-1 text-sm text-[#718590]">Добавьте первое накопительное значение счётчика.</p></div> : <div className="overflow-x-auto"><Table><TableHeader><TableRow><TableHead>Дата</TableHead><TableHead>Час</TableHead><TableHead>Показание, кВт⋅ч</TableHead><TableHead>Расход до следующего</TableHead><TableHead>Комментарий</TableHead><TableHead className="text-right">Действия</TableHead></TableRow></TableHeader><TableBody>{readings.map((reading, index) => { const next = index > 0 ? readings[index - 1] : null; const intervalHours = next ? hoursBetween(reading, next) : 0; const delta = next ? Number(next.valueKwh) - Number(reading.valueKwh) : 0; return <TableRow key={reading.id}><TableCell>{formatDate(reading.date)}</TableCell><TableCell>{String(reading.hour).padStart(2, "0")}:00</TableCell><TableCell className="font-medium text-[#17374c]">{formatKwh(reading.valueKwh)}</TableCell><TableCell>{next ? `${formatKwh(delta)} / ${intervalHours} ч` : "—"}</TableCell><TableCell className="max-w-52 truncate text-[#637b89]">{reading.comment || "—"}</TableCell><TableCell><div className="flex justify-end gap-1">{next && <Button variant="outline" size="sm" className="rounded-lg" onClick={() => void openInterval(reading)}><SlidersHorizontal size={15} />Уточнить факт</Button>}<Button variant="ghost" size="icon" onClick={() => { setError(""); setEditReading(reading); }} aria-label={`Изменить показание ${formatDate(reading.date)} ${reading.hour}:00`}><Pencil size={16} /></Button><Button variant="ghost" size="icon" className="text-[#a54b39]" onClick={() => setDeleteReading(reading)} aria-label={`Удалить показание ${formatDate(reading.date)} ${reading.hour}:00`}><Trash2 size={16} /></Button></div></TableCell></TableRow>; })}</TableBody></Table></div>}
     </div>
 
-    <Dialog open={addOpen} onOpenChange={setAddOpen}><DialogContent className="rounded-2xl"><DialogHeader><DialogTitle>Новое показание</DialogTitle><DialogDescription>Введите накопительное значение основного электросчётчика. Время фиксируется только на целый час.</DialogDescription></DialogHeader><form className="grid gap-4" onSubmit={submitReading}>{error && <div className="flex items-start gap-3 rounded-xl border border-[#efc7bd] bg-[#fff4f1] p-3 text-sm text-[#8c3f2c]" role="alert"><AlertCircle className="mt-0.5 shrink-0" size={17} />{error}</div>}<div className="grid gap-4 sm:grid-cols-2"><label className="grid gap-2 text-sm font-medium text-[#29475a]">Дата<input className={fieldClass} defaultValue={defaultReadingDate} name="date" required type="date" /></label><label className="grid gap-2 text-sm font-medium text-[#29475a]">Час<select className={fieldClass} defaultValue={String(defaultReadingHour)} name="hour">{Array.from({ length: 24 }, (_, hour) => <option value={hour} key={hour}>{String(hour).padStart(2, "0")}:00</option>)}</select></label></div><label className="grid gap-2 text-sm font-medium text-[#29475a]">Показание, кВт⋅ч<input className={fieldClass} name="valueKwh" min="0" placeholder="15860,400000" required step="0.000001" inputMode="decimal" /></label><label className="grid gap-2 text-sm font-medium text-[#29475a]">Комментарий<textarea className="min-h-24 rounded-xl border border-[#d8e3e7] bg-white p-3 text-sm outline-none focus:border-[#1e7680]" name="comment" placeholder="Например, снято вручную со счётчика" /></label><DialogFooter><Button variant="outline" type="button" onClick={() => setAddOpen(false)}>Отмена</Button><Button className="bg-[#153d59] text-white" type="submit">Сохранить показание</Button></DialogFooter></form></DialogContent></Dialog>
+    <Dialog open={addOpen} onOpenChange={(open) => { setAddOpen(open); if (!open) { setPreview(null); setPreviewError(""); } }}><DialogContent className="max-h-[90vh] overflow-y-auto rounded-2xl sm:max-w-2xl"><DialogHeader><DialogTitle>Новое показание</DialogTitle><DialogDescription>До сохранения проверьте соседние показания, расход и диапазон пересчёта.</DialogDescription></DialogHeader><form className="grid gap-4" onSubmit={submitReading}>
+      {error && <div className="flex items-start gap-3 rounded-xl border border-[#efc7bd] bg-[#fff4f1] p-3 text-sm text-[#8c3f2c]" role="alert"><AlertCircle className="mt-0.5 shrink-0" size={17} />{error}</div>}
+      <div className="grid gap-4 sm:grid-cols-2"><label className="grid gap-2 text-sm font-medium text-[#29475a]">Дата<input className={fieldClass} value={addDate} onChange={event => setAddDate(event.target.value)} name="date" required type="date" /></label><label className="grid gap-2 text-sm font-medium text-[#29475a]">Час<select className={fieldClass} value={addHour} onChange={event => setAddHour(Number(event.target.value))} name="hour">{Array.from({ length: 24 }, (_, hour) => <option value={hour} key={hour}>{String(hour).padStart(2, "0")}:00</option>)}</select></label></div>
+      <label className="grid gap-2 text-sm font-medium text-[#29475a]">Показание, кВт⋅ч<input className={fieldClass} value={addValue} onChange={event => setAddValue(event.target.value)} name="valueKwh" min="0" placeholder="15860,400000" required step="0.000001" inputMode="decimal" /></label>
+      {previewLoading && <div className="rounded-xl bg-[#f3f7f8] p-4 text-sm text-[#718590]">Проверяем соседние показания…</div>}
+      {previewError && <div className="rounded-xl border border-[#efc7bd] bg-[#fff4f1] p-3 text-sm text-[#8c3f2c]">{previewError}</div>}
+      {preview && <ReadingPreviewPanel preview={preview} />}
+      <label className="grid gap-2 text-sm font-medium text-[#29475a]">Комментарий<textarea className="min-h-24 rounded-xl border border-[#d8e3e7] bg-white p-3 text-sm outline-none focus:border-[#1e7680]" name="comment" placeholder="Например, снято вручную со счётчика" /></label>
+      <DialogFooter><Button variant="outline" type="button" onClick={() => setAddOpen(false)}>Отмена</Button><Button className="bg-[#153d59] text-white" disabled={previewLoading || Boolean(previewError) || !preview} type="submit">Сохранить показание</Button></DialogFooter>
+    </form></DialogContent></Dialog>
 
     <Dialog open={Boolean(editReading)} onOpenChange={(open) => !open && setEditReading(null)}><DialogContent className="rounded-2xl"><DialogHeader><DialogTitle>Изменить показание</DialogTitle><DialogDescription>{editReading ? `${formatDate(editReading.date)}, ${String(editReading.hour).padStart(2, "0")}:00. Дата и час не изменяются.` : ""}</DialogDescription></DialogHeader>{editReading && <form className="grid gap-4" onSubmit={submitEdit}>{error && <div className="flex items-start gap-3 rounded-xl border border-[#efc7bd] bg-[#fff4f1] p-3 text-sm text-[#8c3f2c]" role="alert"><AlertCircle className="mt-0.5 shrink-0" size={17} />{error}</div>}<label className="grid gap-2 text-sm font-medium text-[#29475a]">Показание, кВт⋅ч<input className={fieldClass} defaultValue={editReading.valueKwh} name="valueKwh" min="0" required step="0.000001" /></label><label className="grid gap-2 text-sm font-medium text-[#29475a]">Комментарий<textarea className="min-h-24 rounded-xl border border-[#d8e3e7] bg-white p-3 text-sm outline-none focus:border-[#1e7680]" defaultValue={editReading.comment} name="comment" /></label><DialogFooter><Button variant="outline" type="button" onClick={() => setEditReading(null)}>Отмена</Button><Button className="bg-[#153d59] text-white" type="submit">Сохранить изменения</Button></DialogFooter></form>}</DialogContent></Dialog>
 
