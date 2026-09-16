@@ -52,6 +52,17 @@ export const auditLog = sqliteTable("audit_log", {
   index("idx_audit_log_created_at").on(table.createdAt),
 ]);
 
+export const tariffVersions = sqliteTable("tariff_versions", {
+  id: text("id").primaryKey(),
+  validFromDate: text("valid_from_date").notNull(),
+  priceMicros: integer("price_micros").notNull(),
+  comment: text("comment").notNull().default(""),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (table) => [
+  uniqueIndex("uq_tariff_versions_valid_from_date").on(table.validFromDate),
+  index("idx_tariff_versions_effective_date").on(table.validFromDate),
+]);
+
 export const zones = sqliteTable("zones", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),

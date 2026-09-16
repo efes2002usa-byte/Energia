@@ -22,6 +22,13 @@
       "when": 1789589829343,
       "tag": "0002_mysterious_cloak",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1789592217455,
+      "tag": "0003_new_guardian",
+      "breakpoints": true
     }
   ]
 }

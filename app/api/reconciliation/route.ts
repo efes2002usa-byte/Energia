@@ -3,6 +3,7 @@ import { ensureMainMeter, errorResponse, MAIN_METER_ID, microsToDecimal, slotDat
 
 type Reading = { reading_date: string; reading_hour: number; value_micros: number };
 type Manual = { date: string; hour: number; consumption_micros: number };
+type Tariff = { id: string; valid_from_date: string; price_micros: number };
 type BaseDevice = { id: string; name: string; active_from_date: string; inactive_from_date: string | null };
 type EffectiveDevice = {
   placement_version_id: string | null; consumption_version_id: string | null;
@@ -33,6 +34,10 @@ function dateRange(from: string, to: string) {
 
 function slotsForRange(from: string, to: string) {
   return dateRange(from, to).flatMap(date => Array.from({ length: 24 }, (_, hour) => ({ date, hour })));
+}
+
+function costMicros(energyMicros: number, priceMicros: number) {
+  return Math.round(energyMicros * priceMicros / 1_000_000);
 }
 
 function readRange(request: Request) {
@@ -77,6 +82,7 @@ async function calculateInterval(db: D1Database, left: Reading, right: Reading) 
 
 async function buildCalculation(db: D1Database, from: string, to: string) {
   const readings = await db.prepare(`SELECT reading_date, reading_hour, value_micros FROM meter_readings WHERE meter_id = ? ORDER BY reading_date, reading_hour`).bind(MAIN_METER_ID).all<Reading>();
+  const tariffs = await db.prepare(`SELECT id, valid_from_date, price_micros FROM tariff_versions WHERE valid_from_date <= ? ORDER BY valid_from_date`).bind(to).all<Tariff>();
   const actual = new Map<string, { micros: number; quality: string }>();
   for (let index = 0; index < readings.results.length - 1; index += 1) {
     for (const item of await calculateInterval(db, readings.results[index], readings.results[index + 1])) {
@@ -134,13 +140,30 @@ async function buildCalculation(db: D1Database, from: string, to: string) {
     const deltaPercent = fact && fact.micros !== 0 && deltaMicros !== null ? deltaMicros / fact.micros * 100 : null;
     const anomaly = deltaMicros !== null && Math.abs(deltaMicros) > ABSOLUTE_TOLERANCE_MICROS && (deltaPercent === null || Math.abs(deltaPercent) > PERCENT_TOLERANCE);
     const status = errorMessage ? "CALCULATION_ERROR" : !fact ? "MISSING" : !anomaly ? "NORMAL" : deltaMicros! > 0 ? "UNALLOCATED" : "MODEL_HIGH";
-    return { ...slot, actualMicros: fact?.micros ?? null, actualKwh: fact ? microsToDecimal(fact.micros) : null, quality: fact?.quality ?? "MISSING", devicesMicros, devicesKwh: microsToDecimal(devicesMicros), deltaMicros, deltaKwh: deltaMicros === null ? null : microsToDecimal(deltaMicros), deltaPercent, status, errorMessage, details: deviceDetails };
+    const tariff = tariffs.results.findLast(item => item.valid_from_date <= slot.date) ?? null;
+    const actualCostMicros = fact && tariff ? costMicros(fact.micros, tariff.price_micros) : null;
+    const devicesCostMicros = tariff ? costMicros(devicesMicros, tariff.price_micros) : null;
+    const unallocatedMicros = deltaMicros === null ? null : Math.max(deltaMicros, 0);
+    const unallocatedCostMicros = unallocatedMicros !== null && tariff ? costMicros(unallocatedMicros, tariff.price_micros) : null;
+    return { ...slot, actualMicros: fact?.micros ?? null, actualKwh: fact ? microsToDecimal(fact.micros) : null, quality: fact?.quality ?? "MISSING", devicesMicros, devicesKwh: microsToDecimal(devicesMicros), deltaMicros, deltaKwh: deltaMicros === null ? null : microsToDecimal(deltaMicros), deltaPercent, status, errorMessage, details: deviceDetails,
+      tariffId: tariff?.id ?? null, tariffPrice: tariff ? microsToDecimal(tariff.price_micros) : null,
+      actualCostMicros, actualCost: actualCostMicros === null ? null : microsToDecimal(actualCostMicros),
+      devicesCostMicros, devicesCost: devicesCostMicros === null ? null : microsToDecimal(devicesCostMicros),
+      unallocatedCostMicros, unallocatedCost: unallocatedCostMicros === null ? null : microsToDecimal(unallocatedCostMicros) };
   });
   const rows = allRows.filter(row => row.actualMicros !== null || row.devicesMicros > 0 || row.status === "CALCULATION_ERROR");
   const totalActualMicros = rows.reduce((sum, row) => sum + (row.actualMicros ?? 0), 0);
   const totalDevicesMicros = rows.reduce((sum, row) => sum + row.devicesMicros, 0);
+  const sumCost = (field: "actualCostMicros" | "devicesCostMicros" | "unallocatedCostMicros", relevant: (row: (typeof rows)[number]) => boolean) => {
+    const selected = rows.filter(relevant);
+    return selected.some(row => row[field] === null) ? null : selected.reduce((sum, row) => sum + (row[field] ?? 0), 0);
+  };
+  const totalActualCost = sumCost("actualCostMicros", row => row.actualMicros !== null);
+  const totalDevicesCost = sumCost("devicesCostMicros", row => row.devicesMicros > 0);
+  const totalUnallocatedCost = sumCost("unallocatedCostMicros", row => row.deltaMicros !== null && row.deltaMicros > 0);
   const aggregate = (field: "zone" | "category") => Array.from(rows.flatMap(row => row.details).reduce((map, item) => map.set(item[field], (map.get(item[field]) ?? 0) + item.energyMicros), new Map<string, number>())).map(([name, micros]) => ({ name, energyKwh: microsToDecimal(micros) }));
-  return { from, to, allRows, rows, summary: { actualKwh: microsToDecimal(totalActualMicros), devicesKwh: microsToDecimal(totalDevicesMicros), deltaKwh: microsToDecimal(totalActualMicros - totalDevicesMicros), coveragePercent: rows.length ? Math.round(rows.filter(row => row.actualMicros !== null).length / rows.length * 100) : 0 }, byZone: aggregate("zone"), byCategory: aggregate("category"), errors: [...new Set(errors)] };
+  return { from, to, allRows, rows, summary: { actualKwh: microsToDecimal(totalActualMicros), devicesKwh: microsToDecimal(totalDevicesMicros), deltaKwh: microsToDecimal(totalActualMicros - totalDevicesMicros), coveragePercent: rows.length ? Math.round(rows.filter(row => row.actualMicros !== null).length / rows.length * 100) : 0,
+    actualCost: totalActualCost === null ? null : microsToDecimal(totalActualCost), devicesCost: totalDevicesCost === null ? null : microsToDecimal(totalDevicesCost), unallocatedCost: totalUnallocatedCost === null ? null : microsToDecimal(totalUnallocatedCost) }, byZone: aggregate("zone"), byCategory: aggregate("category"), errors: [...new Set(errors)] };
 }
 
 async function persistCalculation(db: D1Database, calculation: Awaited<ReturnType<typeof buildCalculation>>) {
