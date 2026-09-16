@@ -35,6 +35,21 @@ import {
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
 import {
@@ -88,9 +103,9 @@ const navItems = [
 ];
 
 const metrics = [
-  { label: "Фактический расход", value: "3 820", unit: "кВт⋅ч", detail: "12 420 ₽", trend: "+4,2 % к августу", icon: Zap, tone: "blue" },
-  { label: "По приборам", value: "3 410", unit: "кВт⋅ч", detail: "11 087 ₽", trend: "89,3 % объяснено", icon: Wrench, tone: "teal" },
-  { label: "Нераспределено", value: "+410", unit: "кВт⋅ч", detail: "+1 333 ₽", trend: "+10,7 % от факта", icon: AlertTriangle, tone: "amber" },
+  { label: "Фактический расход", value: "3 820", unit: "кВт⋅ч", detail: "12 420 ₽", trend: "+4,2 % к августу", icon: Zap, tone: "blue", href: "/analytics" },
+  { label: "По приборам", value: "3 410", unit: "кВт⋅ч", detail: "11 087 ₽", trend: "89,3 % объяснено", icon: Wrench, tone: "teal", href: "/devices" },
+  { label: "Нераспределено", value: "+410", unit: "кВт⋅ч", detail: "+1 333 ₽", trend: "+10,7 % от факта", icon: AlertTriangle, tone: "amber", href: "/reconciliation" },
 ];
 
 const categories = [
@@ -110,7 +125,7 @@ const alerts = [
 function MetricCard({ metric }: { metric: (typeof metrics)[number] }) {
   const Icon = metric.icon;
   return (
-    <button className="metric-card group text-left" type="button">
+    <a className="metric-card group text-left" href={metric.href} aria-label={`${metric.label}: открыть подробности`}>
       <div className={`metric-icon metric-icon-${metric.tone}`}><Icon aria-hidden="true" size={18} /></div>
       <div className="mt-5 flex items-end justify-between gap-4">
         <div>
@@ -127,7 +142,7 @@ function MetricCard({ metric }: { metric: (typeof metrics)[number] }) {
         <span className="font-medium text-[#2d485b]">{metric.detail}</span>
         <span className={metric.tone === "amber" ? "text-[#a66b0a]" : "text-[#637b89]"}>{metric.trend}</span>
       </div>
-    </button>
+    </a>
   );
 }
 
@@ -162,16 +177,19 @@ function DashboardChart({ period }: { period: "month" | "week" }) {
 
 export default function Home() {
   const [period, setPeriod] = useState<"month" | "week">("month");
+  const [dateDialogOpen, setDateDialogOpen] = useState(false);
+  const [customPeriod, setCustomPeriod] = useState("");
   const periodLabel = useMemo(() => period === "month" ? "1–30 сентября 2026" : "14–20 сентября 2026", [period]);
+  const displayedPeriod = customPeriod || periodLabel;
 
   return (
     <SidebarProvider>
       <Sidebar collapsible="icon" className="border-none">
         <SidebarHeader className="px-4 pb-4 pt-5">
-          <div className="flex items-center gap-3 px-2">
+          <a href="/" className="flex items-center gap-3 px-2" aria-label="Energia — главная">
             <div className="brand-mark"><Bolt aria-hidden="true" size={19} fill="currentColor" /></div>
             <div className="min-w-0 group-data-[collapsible=icon]:hidden"><p className="text-[1.06rem] font-semibold tracking-[-0.035em] text-white">Energia</p><p className="truncate text-xs text-white/48">Основной бар</p></div>
-          </div>
+          </a>
         </SidebarHeader>
         <SidebarContent className="px-3">
           <SidebarGroup>
@@ -194,20 +212,20 @@ export default function Home() {
           </SidebarGroup>
         </SidebarContent>
         <SidebarFooter className="px-4 pb-5">
-          <div className="rounded-2xl border border-white/8 bg-white/[0.045] p-3 group-data-[collapsible=icon]:p-2"><div className="flex items-center gap-3"><div className="grid size-9 shrink-0 place-items-center rounded-full bg-[#d9edf0] text-sm font-semibold text-[#16404f]">A</div><div className="min-w-0 group-data-[collapsible=icon]:hidden"><p className="truncate text-sm font-medium text-white">Администратор</p><p className="truncate text-xs text-white/42">Данные актуальны</p></div><ChevronDown className="ml-auto text-white/35 group-data-[collapsible=icon]:hidden" size={15} /></div></div>
+          <a href="/settings" className="block rounded-2xl border border-white/8 bg-white/[0.045] p-3 transition hover:bg-white/[0.08] group-data-[collapsible=icon]:p-2" aria-label="Открыть настройки профиля"><div className="flex items-center gap-3"><div className="grid size-9 shrink-0 place-items-center rounded-full bg-[#d9edf0] text-sm font-semibold text-[#16404f]">A</div><div className="min-w-0 group-data-[collapsible=icon]:hidden"><p className="truncate text-sm font-medium text-white">Администратор</p><p className="truncate text-xs text-white/42">Данные актуальны</p></div><ChevronDown className="ml-auto text-white/35 group-data-[collapsible=icon]:hidden" size={15} /></div></a>
         </SidebarFooter>
       </Sidebar>
 
       <SidebarInset className="min-w-0 bg-[#f3f7f8]">
         <header className="sticky top-0 z-20 flex h-[72px] items-center justify-between border-b border-[#dfe8eb] bg-[#f8fbfb]/90 px-4 backdrop-blur-xl sm:px-7 lg:px-9">
           <div className="flex items-center gap-3"><SidebarTrigger className="size-9 rounded-xl border border-[#dbe5e9] bg-white text-[#17384e] shadow-sm hover:bg-[#edf4f5]" /><div className="hidden h-7 w-px bg-[#dbe4e8] sm:block" /><div className="hidden sm:block"><p className="text-sm font-medium text-[#19374b]">Основной бар</p><p className="text-xs text-[#718590]">Москва · UTC+3</p></div></div>
-          <div className="flex items-center gap-3"><div className="hidden items-center gap-2 rounded-full border border-[#dce8e8] bg-white px-3 py-2 text-xs font-medium text-[#48616f] shadow-sm md:flex"><span className="size-2 rounded-full bg-[#2ca381] shadow-[0_0_0_4px_rgba(44,163,129,.1)]" />Пересчитано в 14:32</div><Button variant="outline" size="icon" className="rounded-xl border-[#dbe5e9] bg-white text-[#4b6573]"><MoreHorizontal aria-hidden="true" size={18} /><span className="sr-only">Дополнительные действия</span></Button></div>
+          <div className="flex items-center gap-3"><div className="hidden items-center gap-2 rounded-full border border-[#dce8e8] bg-white px-3 py-2 text-xs font-medium text-[#48616f] shadow-sm md:flex"><span className="size-2 rounded-full bg-[#2ca381] shadow-[0_0_0_4px_rgba(44,163,129,.1)]" />Пересчитано в 14:32</div><DropdownMenu><DropdownMenuTrigger asChild><Button variant="outline" size="icon" className="rounded-xl border-[#dbe5e9] bg-white text-[#4b6573]"><MoreHorizontal aria-hidden="true" size={18} /><span className="sr-only">Дополнительные действия</span></Button></DropdownMenuTrigger><DropdownMenuContent align="end" className="w-52"><DropdownMenuItem asChild><a href="/reconciliation">Открыть сверку</a></DropdownMenuItem><DropdownMenuItem asChild><a href="/analytics">Открыть аналитику</a></DropdownMenuItem><DropdownMenuSeparator /><DropdownMenuItem asChild><a href="/settings">Настройки</a></DropdownMenuItem></DropdownMenuContent></DropdownMenu></div>
         </header>
 
         <main className="mx-auto w-full max-w-[1560px] px-4 pb-10 pt-6 sm:px-7 lg:px-9 lg:pt-8">
           <section className="mb-7 flex flex-col justify-between gap-5 xl:flex-row xl:items-end">
             <div><div className="mb-2 flex items-center gap-2 text-sm font-medium text-[#6e838e]"><Sparkles size={15} className="text-[#c68b22]" />Обзор энергопотребления</div><h1 className="text-[clamp(2rem,4vw,3.15rem)] font-semibold tracking-[-0.055em] text-[#102d43]">Главная</h1><p className="mt-2 max-w-xl text-[0.95rem] leading-6 text-[#627986]">Факт, расчётная модель и расхождения за выбранный период.</p></div>
-            <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-[#dce7ea] bg-white p-2 shadow-[0_9px_30px_rgba(22,57,78,.06)]"><div className="flex rounded-xl bg-[#eef3f4] p-1"><button className={`period-button ${period === "week" ? "period-button-active" : ""}`} onClick={() => setPeriod("week")} type="button">Неделя</button><button className={`period-button ${period === "month" ? "period-button-active" : ""}`} onClick={() => setPeriod("month")} type="button">Месяц</button></div><button className="flex h-10 min-w-[190px] items-center justify-center gap-2 rounded-xl px-3 text-sm font-medium text-[#29475a] hover:bg-[#f3f7f8]" type="button"><CalendarDays size={16} className="text-[#67808e]" />{periodLabel}<ChevronDown size={14} className="ml-auto text-[#8597a1]" /></button></div>
+            <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-[#dce7ea] bg-white p-2 shadow-[0_9px_30px_rgba(22,57,78,.06)]"><div className="flex rounded-xl bg-[#eef3f4] p-1"><button className={`period-button ${period === "week" ? "period-button-active" : ""}`} onClick={() => { setPeriod("week"); setCustomPeriod(""); }} type="button">Неделя</button><button className={`period-button ${period === "month" ? "period-button-active" : ""}`} onClick={() => { setPeriod("month"); setCustomPeriod(""); }} type="button">Месяц</button></div><button className="flex h-10 min-w-[190px] items-center justify-center gap-2 rounded-xl px-3 text-sm font-medium text-[#29475a] hover:bg-[#f3f7f8]" onClick={() => setDateDialogOpen(true)} type="button"><CalendarDays size={16} className="text-[#67808e]" />{displayedPeriod}<ChevronDown size={14} className="ml-auto text-[#8597a1]" /></button></div>
           </section>
 
           <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{metrics.map((metric) => <MetricCard key={metric.label} metric={metric} />)}</section>
@@ -219,13 +237,23 @@ export default function Home() {
           </section>
 
           <section className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,.9fr)_minmax(0,1.1fr)]">
-            <div className="surface-card p-5 sm:p-6"><div className="flex items-start justify-between"><div><h2 className="section-title">Структура по категориям</h2><p className="mt-1 text-sm text-[#738792]">Доля расчётного потребления</p></div><Button variant="ghost" size="sm" className="rounded-xl text-[#506b7b]">Подробнее</Button></div><div className="mt-6 flex flex-col items-center gap-7 sm:flex-row"><Donut /><div className="grid w-full gap-3">{categories.map((category) => <div className="flex items-center justify-between gap-4" key={category.name}><span className="flex items-center gap-2.5 text-sm text-[#405b6b]"><i className="size-2.5 rounded-full" style={{ backgroundColor: category.color }} />{category.name}</span><span className="text-sm font-semibold text-[#19394f]">{category.value} %</span></div>)}</div></div></div>
+            <div className="surface-card p-5 sm:p-6"><div className="flex items-start justify-between"><div><h2 className="section-title">Структура по категориям</h2><p className="mt-1 text-sm text-[#738792]">Доля расчётного потребления</p></div><Button asChild variant="ghost" size="sm" className="rounded-xl text-[#506b7b]"><a href="/analytics">Подробнее</a></Button></div><div className="mt-6 flex flex-col items-center gap-7 sm:flex-row"><Donut /><div className="grid w-full gap-3">{categories.map((category) => <div className="flex items-center justify-between gap-4" key={category.name}><span className="flex items-center gap-2.5 text-sm text-[#405b6b]"><i className="size-2.5 rounded-full" style={{ backgroundColor: category.color }} />{category.name}</span><span className="text-sm font-semibold text-[#19394f]">{category.value} %</span></div>)}</div></div></div>
 
-            <div className="surface-card overflow-hidden"><div className="flex items-start justify-between px-5 pb-4 pt-5 sm:px-6"><div><h2 className="section-title">Требуют внимания</h2><p className="mt-1 text-sm text-[#738792]">Отклонения и неполные данные</p></div><Badge className="rounded-full bg-[#fff0d4] px-2.5 py-1 text-[#925e09] hover:bg-[#fff0d4]">3 события</Badge></div><div className="divide-y divide-[#e9eef0] border-y border-[#e9eef0]">{alerts.map((alert) => <button className="alert-row group" key={alert.date} type="button"><div className={`alert-symbol alert-symbol-${alert.tone}`}>{alert.tone === "info" ? <TrendingDown size={17} /> : <AlertTriangle size={17} />}</div><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-x-3 gap-y-1"><p className="font-medium text-[#15354b]">{alert.title}</p><span className="text-xs text-[#8799a3]">{alert.date}</span></div><p className="mt-1 text-sm text-[#687f8c]">{alert.detail}</p></div><ChevronDown className="-rotate-90 text-[#9aabb4] transition-transform group-hover:translate-x-1" size={17} /></button>)}</div><div className="flex items-center justify-between px-5 py-4 sm:px-6"><span className="flex items-center gap-2 text-xs text-[#708590]"><CheckCircle2 size={15} className="text-[#348a73]" />27 дней без критичных событий</span><Button variant="outline" size="sm" className="rounded-xl border-[#d9e4e8] text-[#284b60]">Открыть сверку</Button></div></div>
+            <div className="surface-card overflow-hidden"><div className="flex items-start justify-between px-5 pb-4 pt-5 sm:px-6"><div><h2 className="section-title">Требуют внимания</h2><p className="mt-1 text-sm text-[#738792]">Отклонения и неполные данные</p></div><Badge className="rounded-full bg-[#fff0d4] px-2.5 py-1 text-[#925e09] hover:bg-[#fff0d4]">3 события</Badge></div><div className="divide-y divide-[#e9eef0] border-y border-[#e9eef0]">{alerts.map((alert) => <a className="alert-row group" href="/reconciliation" key={alert.date} aria-label={`${alert.title}: открыть сверку`}><div className={`alert-symbol alert-symbol-${alert.tone}`}>{alert.tone === "info" ? <TrendingDown size={17} /> : <AlertTriangle size={17} />}</div><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-x-3 gap-y-1"><p className="font-medium text-[#15354b]">{alert.title}</p><span className="text-xs text-[#8799a3]">{alert.date}</span></div><p className="mt-1 text-sm text-[#687f8c]">{alert.detail}</p></div><ChevronDown className="-rotate-90 text-[#9aabb4] transition-transform group-hover:translate-x-1" size={17} /></a>)}</div><div className="flex items-center justify-between px-5 py-4 sm:px-6"><span className="flex items-center gap-2 text-xs text-[#708590]"><CheckCircle2 size={15} className="text-[#348a73]" />27 дней без критичных событий</span><Button asChild variant="outline" size="sm" className="rounded-xl border-[#d9e4e8] text-[#284b60]"><a href="/reconciliation">Открыть сверку</a></Button></div></div>
           </section>
 
           <footer className="mt-6 flex flex-col justify-between gap-3 rounded-2xl border border-[#dfe8eb] bg-white/65 px-5 py-4 text-xs text-[#71858f] sm:flex-row sm:items-center"><span className="flex items-center gap-2"><ClipboardCheck size={15} className="text-[#2c8871]" />Последний успешный пересчёт: 15 сентября 2026, 14:32</span><span>Тариф: 3,30 ₽/кВт⋅ч · Допуск: ±5 % и ±1 кВт⋅ч</span></footer>
         </main>
+        <Dialog open={dateDialogOpen} onOpenChange={setDateDialogOpen}>
+          <DialogContent className="rounded-2xl border-[#dce7ea] sm:max-w-md">
+            <DialogHeader><DialogTitle>Выбрать период</DialogTitle><DialogDescription>Укажите начало и конец периода для обзора.</DialogDescription></DialogHeader>
+            <form className="grid gap-4" onSubmit={(event) => { event.preventDefault(); const data = new FormData(event.currentTarget); const from = String(data.get("from")); const to = String(data.get("to")); if (from && to) { const format = (value: string) => new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "short", year: "numeric" }).format(new Date(`${value}T12:00:00`)); setCustomPeriod(`${format(from)} — ${format(to)}`); setDateDialogOpen(false); } }}>
+              <label className="grid gap-2 text-sm font-medium text-[#29475a]">Начало<input className="h-11 rounded-xl border border-[#d8e3e7] bg-white px-3 outline-none focus:border-[#1e7680]" defaultValue="2026-09-01" name="from" required type="date" /></label>
+              <label className="grid gap-2 text-sm font-medium text-[#29475a]">Конец<input className="h-11 rounded-xl border border-[#d8e3e7] bg-white px-3 outline-none focus:border-[#1e7680]" defaultValue="2026-09-30" name="to" required type="date" /></label>
+              <DialogFooter><Button variant="outline" type="button" onClick={() => setDateDialogOpen(false)}>Отмена</Button><Button className="bg-[#153d59] text-white" type="submit">Применить</Button></DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
       </SidebarInset>
     </SidebarProvider>
   );

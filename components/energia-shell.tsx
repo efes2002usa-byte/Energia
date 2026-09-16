@@ -18,6 +18,13 @@ import {
 
 import { Button } from "@/components/ui/button";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
   Sidebar,
   SidebarContent,
   SidebarFooter,
@@ -87,13 +94,13 @@ export function EnergiaShell({ children }: { children: ReactNode }) {
           </SidebarGroup>
         </SidebarContent>
         <SidebarFooter className="px-4 pb-5">
-          <div className="rounded-2xl border border-white/8 bg-white/[0.045] p-3 group-data-[collapsible=icon]:p-2">
+          <a href="/settings" className="block rounded-2xl border border-white/8 bg-white/[0.045] p-3 transition hover:bg-white/[0.08] group-data-[collapsible=icon]:p-2" aria-label="Открыть настройки профиля">
             <div className="flex items-center gap-3">
               <div className="grid size-9 shrink-0 place-items-center rounded-full bg-[#d9edf0] text-sm font-semibold text-[#16404f]">A</div>
               <div className="min-w-0 group-data-[collapsible=icon]:hidden"><p className="truncate text-sm font-medium text-white">Администратор</p><p className="truncate text-xs text-white/42">Данные актуальны</p></div>
               <ChevronDown className="ml-auto text-white/35 group-data-[collapsible=icon]:hidden" size={15} />
             </div>
-          </div>
+          </a>
         </SidebarFooter>
       </Sidebar>
       <SidebarInset className="min-w-0 bg-[#f3f7f8]">
@@ -105,7 +112,15 @@ export function EnergiaShell({ children }: { children: ReactNode }) {
           </div>
           <div className="flex items-center gap-3">
             <div className="hidden items-center gap-2 rounded-full border border-[#dce8e8] bg-white px-3 py-2 text-xs font-medium text-[#48616f] shadow-sm md:flex"><span className="size-2 rounded-full bg-[#2ca381] shadow-[0_0_0_4px_rgba(44,163,129,.1)]" />Пересчитано в 14:32</div>
-            <Button variant="outline" size="icon" className="rounded-xl border-[#dbe5e9] bg-white text-[#4b6573]"><MoreHorizontal aria-hidden="true" size={18} /><span className="sr-only">Дополнительные действия</span></Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild><Button variant="outline" size="icon" className="rounded-xl border-[#dbe5e9] bg-white text-[#4b6573]"><MoreHorizontal aria-hidden="true" size={18} /><span className="sr-only">Дополнительные действия</span></Button></DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-52">
+                <DropdownMenuItem asChild><a href="/reconciliation">Открыть сверку</a></DropdownMenuItem>
+                <DropdownMenuItem asChild><a href="/analytics">Открыть аналитику</a></DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem asChild><a href="/settings">Настройки</a></DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </header>
         {children}
