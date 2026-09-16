@@ -155,3 +155,38 @@ export const deviceScheduleDays = sqliteTable("device_schedule_days", {
   primaryKey({ columns: [table.deviceId, table.date] }),
   index("idx_device_schedule_days_date").on(table.date),
 ]);
+
+export const deviceHourlyEnergy = sqliteTable("device_hourly_energy", {
+  deviceId: text("device_id").notNull().references(() => devices.id),
+  date: text("date").notNull(),
+  hour: integer("hour").notNull(),
+  consumptionVersionId: text("consumption_version_id").notNull().references(() => deviceConsumptionVersions.id),
+  placementVersionId: text("placement_version_id").notNull().references(() => devicePlacementVersions.id),
+  zoneId: text("zone_id").notNull().references(() => zones.id),
+  categoryId: text("category_id").notNull().references(() => deviceCategories.id),
+  energyMicros: integer("energy_micros").notNull(),
+  formula: text("formula").notNull(),
+  calculatedAt: text("calculated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (table) => [
+  primaryKey({ columns: [table.deviceId, table.date, table.hour] }),
+  index("idx_device_hourly_energy_date_hour").on(table.date, table.hour),
+  index("idx_device_hourly_energy_zone_date").on(table.zoneId, table.date),
+  index("idx_device_hourly_energy_category_date").on(table.categoryId, table.date),
+]);
+
+export const hourlyReconciliation = sqliteTable("hourly_reconciliation", {
+  meterId: text("meter_id").notNull().references(() => meters.id),
+  date: text("date").notNull(),
+  hour: integer("hour").notNull(),
+  actualMicros: integer("actual_micros"),
+  actualQuality: text("actual_quality").notNull(),
+  devicesMicros: integer("devices_micros").notNull().default(0),
+  deltaMicros: integer("delta_micros"),
+  status: text("status").notNull(),
+  errorMessage: text("error_message").notNull().default(""),
+  calculatedAt: text("calculated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (table) => [
+  primaryKey({ columns: [table.meterId, table.date, table.hour] }),
+  index("idx_hourly_reconciliation_date_status").on(table.date, table.status),
+  index("idx_hourly_reconciliation_quality_date").on(table.actualQuality, table.date),
+]);

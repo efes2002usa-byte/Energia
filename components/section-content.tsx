@@ -15,6 +15,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { CalendarPage as PersistentCalendarPage } from "@/components/calendar-page";
 import { DevicesPage as PersistentDevicesPage } from "@/components/devices-page";
 import { MeterPage } from "@/components/meter-page";
+import { ReconciliationPage as PersistentReconciliationPage } from "@/components/reconciliation-page";
 
 export type Section = "today" | "calendar" | "devices" | "meter" | "reconciliation" | "analytics" | "settings";
 
@@ -63,7 +64,7 @@ function LegacyMeterPage() {
   return <><div className="mb-4 flex justify-end"><Button className="rounded-xl bg-[#153d59] text-white" onClick={() => setDialogOpen(true)}><Plus size={16} />Добавить показание</Button></div><div className="grid gap-4 sm:grid-cols-3"><div className="surface-card p-5"><Gauge size={18} className="text-[#1e7680]" /><p className="eyebrow mt-4">Последнее показание</p><p className="mt-2 text-2xl font-semibold text-[#14364b]">{latest[2]}</p><p className="mt-1 text-sm text-[#718590]">{latest[0]}, {latest[1]}</p></div><div className="surface-card p-5"><Activity size={18} className="text-[#b57a17]" /><p className="eyebrow mt-4">Расход за сегодня</p><p className="mt-2 text-2xl font-semibold text-[#14364b]">82,4 кВт⋅ч</p><p className="mt-1 text-sm text-[#718590]">Покрытие 100 %</p></div><div className="surface-card p-5"><CircleGauge size={18} className="text-[#315f7c]" /><p className="eyebrow mt-4">Основной счётчик</p><p className="mt-2 text-2xl font-semibold text-[#14364b]">Бар №1</p><p className="mt-1 text-sm text-[#718590]">Активен</p></div></div><div className="surface-card mt-4 overflow-hidden"><Table><TableHeader><TableRow><TableHead>Дата</TableHead><TableHead>Время</TableHead><TableHead>Показание, кВт⋅ч</TableHead><TableHead>Расход до следующего</TableHead></TableRow></TableHeader><TableBody>{rows.map((row, rowIndex) => <TableRow key={`${row[0]}-${row[1]}-${rowIndex}`}>{row.map((cell, index) => <TableCell className={index === 2 ? "font-medium text-[#17374c]" : ""} key={`${cell}-${index}`}>{cell}</TableCell>)}</TableRow>)}</TableBody></Table></div><Dialog open={dialogOpen} onOpenChange={setDialogOpen}><DialogContent className="rounded-2xl"><DialogHeader><DialogTitle>Новое показание</DialogTitle><DialogDescription>Введите данные основного электросчётчика.</DialogDescription></DialogHeader><form className="grid gap-4" onSubmit={(event) => { event.preventDefault(); const data = new FormData(event.currentTarget); const date = new Date(`${data.get("date")}T12:00:00`); const formattedDate = new Intl.DateTimeFormat("ru-RU").format(date); const reading = Number(data.get("reading")).toLocaleString("ru-RU", { minimumFractionDigits: 3, maximumFractionDigits: 3 }); setRows(current => [[formattedDate, String(data.get("time")), reading, "Новое показание"], ...current]); setDialogOpen(false); event.currentTarget.reset(); }}><div className="grid gap-4 sm:grid-cols-2"><label className="grid gap-2 text-sm font-medium text-[#29475a]">Дата<input className={fieldClass} defaultValue="2026-09-15" name="date" required type="date" /></label><label className="grid gap-2 text-sm font-medium text-[#29475a]">Время<input className={fieldClass} defaultValue="18:00" name="time" required type="time" /></label></div><label className="grid gap-2 text-sm font-medium text-[#29475a]">Показание, кВт⋅ч<input className={fieldClass} defaultValue="15860.400" min="0" name="reading" required step="0.001" type="number" /></label><DialogFooter><Button variant="outline" type="button" onClick={() => setDialogOpen(false)}>Отмена</Button><Button className="bg-[#153d59] text-white" type="submit">Добавить</Button></DialogFooter></form></DialogContent></Dialog></>;
 }
 
-function ReconciliationPage() {
+function LegacyReconciliationPage() {
   const [from, setFrom] = useState("2026-09-15");
   const [to, setTo] = useState("2026-09-15");
   const [data, setData] = useState<{ summary: { actualKwh: string; devicesKwh: string; deltaKwh: string; coveragePercent: number }; rows: Array<{ date: string; hour: number; actualKwh: string | null; quality: string; devicesKwh: string; deltaKwh: string | null; status: string }>; errors: string[] } | null>(null);
@@ -94,7 +95,7 @@ export function SectionContent({ section }: { section: Section }) {
   if (section === "calendar") return <PersistentCalendarPage />;
   if (section === "devices") return <PersistentDevicesPage />;
   if (section === "meter") return <MeterPage />;
-  if (section === "reconciliation") return <ReconciliationPage />;
+  if (section === "reconciliation") return <PersistentReconciliationPage />;
   if (section === "analytics") return <AnalyticsPage />;
   return <SettingsPage />;
 }
