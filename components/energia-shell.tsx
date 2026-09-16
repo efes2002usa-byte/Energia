@@ -1,7 +1,6 @@
 "use client";
 
 import type { ReactNode } from "react";
-import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   BarChart3,
@@ -51,13 +50,13 @@ export function EnergiaShell({ children }: { children: ReactNode }) {
     <SidebarProvider>
       <Sidebar collapsible="icon" className="border-none">
         <SidebarHeader className="px-4 pb-4 pt-5">
-          <Link href="/" className="flex items-center gap-3 px-2" aria-label="Energia — главная">
+          <a href="/" className="flex items-center gap-3 px-2" aria-label="Energia — главная">
             <div className="brand-mark"><Bolt aria-hidden="true" size={19} fill="currentColor" /></div>
             <div className="min-w-0 group-data-[collapsible=icon]:hidden">
               <p className="text-[1.06rem] font-semibold tracking-[-0.035em] text-white">Energia</p>
               <p className="truncate text-xs text-white/48">Основной бар</p>
             </div>
-          </Link>
+          </a>
         </SidebarHeader>
         <SidebarContent className="px-3">
           <SidebarGroup>
@@ -67,7 +66,7 @@ export function EnergiaShell({ children }: { children: ReactNode }) {
                 {navigation.map((item) => (
                   <SidebarMenuItem key={item.href}>
                     <SidebarMenuButton asChild isActive={pathname === item.href} tooltip={item.label} className="h-10 rounded-xl px-3 text-[0.9rem] text-white/64 hover:bg-white/8 hover:text-white data-[active=true]:bg-[#f0b84c] data-[active=true]:font-semibold data-[active=true]:text-[#10283b]">
-                      <Link href={item.href}><item.icon aria-hidden="true" size={18} /><span>{item.label}</span></Link>
+                      <a href={item.href}><item.icon aria-hidden="true" size={18} /><span>{item.label}</span></a>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 ))}
@@ -80,7 +79,7 @@ export function EnergiaShell({ children }: { children: ReactNode }) {
               <SidebarMenu>
                 <SidebarMenuItem>
                   <SidebarMenuButton asChild isActive={pathname === "/settings"} tooltip="Настройки" className="h-10 rounded-xl px-3 text-[0.9rem] text-white/64 hover:bg-white/8 hover:text-white data-[active=true]:bg-[#f0b84c] data-[active=true]:font-semibold data-[active=true]:text-[#10283b]">
-                    <Link href="/settings"><Settings aria-hidden="true" size={18} /><span>Настройки</span></Link>
+                    <a href="/settings"><Settings aria-hidden="true" size={18} /><span>Настройки</span></a>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               </SidebarMenu>
