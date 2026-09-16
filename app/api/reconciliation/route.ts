@@ -87,10 +87,15 @@ async function buildCalculation(db: D1Database, from: string, to: string) {
     WHERE is_archived = 0 AND active_from_date <= ? AND (inactive_from_date IS NULL OR inactive_from_date > ?) ORDER BY name COLLATE NOCASE`)
     .bind(to, from).all<BaseDevice>();
   const details = new Map<string, DeviceDetail[]>();
+  const calculationErrors = new Map<string, string[]>();
   const errors: string[] = [];
   for (const date of dateRange(from, to)) {
     for (const device of devices.results) {
       if (date < device.active_from_date || (device.inactive_from_date && date >= device.inactive_from_date)) continue;
+      const marker = await db.prepare(`SELECT 1 AS present FROM device_schedule_days WHERE device_id = ? AND date = ?`).bind(device.id, date).first<{ present: number }>();
+      const onHours = marker
+        ? await db.prepare(`SELECT hour FROM device_on_hour WHERE device_id = ? AND date = ? ORDER BY hour`).bind(device.id, date).all<{ hour: number }>()
+        : await db.prepare(`SELECT hour FROM device_default_schedule WHERE device_id = ? AND weekday = ? ORDER BY hour`).bind(device.id, weekdayForDate(date)).all<{ hour: number }>();
       const effective = await db.prepare(`SELECT
         pv.id AS placement_version_id, pv.zone_id, z.name AS zone_name, pv.category_id, c.name AS category_name,
         cv.id AS consumption_version_id, cv.mode, cv.consumption_per_hour_micros, cv.nominal_power_micros, cv.load_factor_ppm, cv.quantity
@@ -100,13 +105,14 @@ async function buildCalculation(db: D1Database, from: string, to: string) {
         LEFT JOIN device_consumption_versions cv ON cv.id = (SELECT id FROM device_consumption_versions WHERE device_id = d.id AND valid_from_date <= ? ORDER BY valid_from_date DESC LIMIT 1)
         WHERE d.id = ?`).bind(date, date, device.id).first<EffectiveDevice>();
       if (!effective?.placement_version_id || !effective.consumption_version_id || !effective.zone_id || !effective.category_id || !effective.zone_name || !effective.category_name || !effective.mode || !effective.quantity) {
-        errors.push(`${device.name} (${date}): отсутствует обязательная версия размещения или потребления`);
+        const message = `${device.name} (${date}): отсутствует обязательная версия размещения или потребления`;
+        errors.push(message);
+        for (const { hour } of onHours.results) {
+          const key = `${date}:${hour}`;
+          calculationErrors.set(key, [...(calculationErrors.get(key) ?? []), message]);
+        }
         continue;
       }
-      const marker = await db.prepare(`SELECT 1 AS present FROM device_schedule_days WHERE device_id = ? AND date = ?`).bind(device.id, date).first<{ present: number }>();
-      const onHours = marker
-        ? await db.prepare(`SELECT hour FROM device_on_hour WHERE device_id = ? AND date = ? ORDER BY hour`).bind(device.id, date).all<{ hour: number }>()
-        : await db.prepare(`SELECT hour FROM device_default_schedule WHERE device_id = ? AND weekday = ? ORDER BY hour`).bind(device.id, weekdayForDate(date)).all<{ hour: number }>();
       const energyMicros = consumptionKwh({ mode: effective.mode, consumption_per_hour_micros: effective.consumption_per_hour_micros, nominal_power_micros: effective.nominal_power_micros, load_factor_ppm: effective.load_factor_ppm, quantity: effective.quantity });
       const formula = effective.mode === "HOURLY_AVERAGE"
         ? `C × N = ${microsToDecimal(effective.consumption_per_hour_micros ?? 0)} × ${effective.quantity}`
@@ -123,13 +129,14 @@ async function buildCalculation(db: D1Database, from: string, to: string) {
     const fact = actual.get(key);
     const deviceDetails = details.get(key) ?? [];
     const devicesMicros = deviceDetails.reduce((sum, item) => sum + item.energyMicros, 0);
+    const errorMessage = (calculationErrors.get(key) ?? []).join("; ");
     const deltaMicros = fact ? fact.micros - devicesMicros : null;
     const deltaPercent = fact && fact.micros !== 0 && deltaMicros !== null ? deltaMicros / fact.micros * 100 : null;
     const anomaly = deltaMicros !== null && Math.abs(deltaMicros) > ABSOLUTE_TOLERANCE_MICROS && (deltaPercent === null || Math.abs(deltaPercent) > PERCENT_TOLERANCE);
-    const status = !fact ? "MISSING" : !anomaly ? "NORMAL" : deltaMicros! > 0 ? "UNALLOCATED" : "MODEL_HIGH";
-    return { ...slot, actualMicros: fact?.micros ?? null, actualKwh: fact ? microsToDecimal(fact.micros) : null, quality: fact?.quality ?? "MISSING", devicesMicros, devicesKwh: microsToDecimal(devicesMicros), deltaMicros, deltaKwh: deltaMicros === null ? null : microsToDecimal(deltaMicros), deltaPercent, status, details: deviceDetails };
+    const status = errorMessage ? "CALCULATION_ERROR" : !fact ? "MISSING" : !anomaly ? "NORMAL" : deltaMicros! > 0 ? "UNALLOCATED" : "MODEL_HIGH";
+    return { ...slot, actualMicros: fact?.micros ?? null, actualKwh: fact ? microsToDecimal(fact.micros) : null, quality: fact?.quality ?? "MISSING", devicesMicros, devicesKwh: microsToDecimal(devicesMicros), deltaMicros, deltaKwh: deltaMicros === null ? null : microsToDecimal(deltaMicros), deltaPercent, status, errorMessage, details: deviceDetails };
   });
-  const rows = allRows.filter(row => row.actualMicros !== null || row.devicesMicros > 0);
+  const rows = allRows.filter(row => row.actualMicros !== null || row.devicesMicros > 0 || row.status === "CALCULATION_ERROR");
   const totalActualMicros = rows.reduce((sum, row) => sum + (row.actualMicros ?? 0), 0);
   const totalDevicesMicros = rows.reduce((sum, row) => sum + row.devicesMicros, 0);
   const aggregate = (field: "zone" | "category") => Array.from(rows.flatMap(row => row.details).reduce((map, item) => map.set(item[field], (map.get(item[field]) ?? 0) + item.energyMicros), new Map<string, number>())).map(([name, micros]) => ({ name, energyKwh: microsToDecimal(micros) }));
@@ -150,7 +157,7 @@ async function persistCalculation(db: D1Database, calculation: Awaited<ReturnTyp
       ON CONFLICT(meter_id, date, hour) DO UPDATE SET actual_micros=excluded.actual_micros, actual_quality=excluded.actual_quality,
       devices_micros=excluded.devices_micros, delta_micros=excluded.delta_micros, status=excluded.status,
       error_message=excluded.error_message, calculated_at=excluded.calculated_at`)
-      .bind(MAIN_METER_ID, row.date, row.hour, row.actualMicros, row.quality, row.devicesMicros, row.deltaMicros, row.status, calculation.errors.join("; "), now));
+      .bind(MAIN_METER_ID, row.date, row.hour, row.actualMicros, row.quality, row.devicesMicros, row.deltaMicros, row.status, row.errorMessage, now));
     await db.batch(statements);
   }
   await db.prepare(`INSERT INTO audit_log (id, entity_type, entity_id, action, after_data, comment, source, created_at)
