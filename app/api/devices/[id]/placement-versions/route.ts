@@ -1,0 +1,34 @@
+import { getD1, validateDate, ValidationError } from "@/lib/device-db";
+import { errorResponse } from "@/lib/energy-db";
+
+export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const { id } = await params;
+    const payload = await request.json() as { validFromDate?: unknown; zoneId?: unknown; categoryId?: unknown; comment?: unknown };
+    const validFromDate = validateDate(payload.validFromDate);
+    const zoneId = String(payload.zoneId ?? "");
+    const categoryId = String(payload.categoryId ?? "");
+    const comment = String(payload.comment ?? "").trim();
+    if (!zoneId || !categoryId) throw new ValidationError("PLACEMENT_REQUIRED", "Выберите зону и категорию");
+    const db = getD1();
+    const [device, zone, category, duplicate] = await Promise.all([
+      db.prepare(`SELECT active_from_date FROM devices WHERE id = ?`).bind(id).first<{ active_from_date: string }>(),
+      db.prepare(`SELECT id FROM zones WHERE id = ? AND is_active = 1`).bind(zoneId).first<{ id: string }>(),
+      db.prepare(`SELECT id FROM device_categories WHERE id = ? AND is_active = 1`).bind(categoryId).first<{ id: string }>(),
+      db.prepare(`SELECT id FROM device_placement_versions WHERE device_id = ? AND valid_from_date = ?`).bind(id, validFromDate).first<{ id: string }>(),
+    ]);
+    if (!device) throw new ValidationError("NOT_FOUND", "Прибор не найден", 404);
+    if (!zone || !category) throw new ValidationError("REFERENCE_INACTIVE", "Зона или категория недоступна", 409);
+    if (validFromDate < device.active_from_date) throw new ValidationError("INVALID_VERSION_DATE", "Версия не может начинаться раньше прибора");
+    if (duplicate) throw new ValidationError("VERSION_DATE_EXISTS", "Версия размещения на эту дату уже существует", 409);
+    const versionId = crypto.randomUUID();
+    const now = new Date().toISOString();
+    await db.batch([
+      db.prepare(`INSERT INTO device_placement_versions (id, device_id, valid_from_date, zone_id, category_id, comment, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`).bind(versionId, id, validFromDate, zoneId, categoryId, comment, now),
+      db.prepare(`INSERT INTO audit_log (id, entity_type, entity_id, action, after_data, comment, source, created_at) VALUES (?, 'DEVICE_PLACEMENT_VERSION', ?, 'CREATE', ?, ?, 'ADMIN', ?)`).bind(crypto.randomUUID(), `${id}:${versionId}`, JSON.stringify({ validFromDate, zoneId, categoryId }), comment, now),
+    ]);
+    return Response.json({ id: versionId }, { status: 201 });
+  } catch (error) {
+    return errorResponse(error);
+  }
+}

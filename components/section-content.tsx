@@ -12,6 +12,8 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { CalendarPage as PersistentCalendarPage } from "@/components/calendar-page";
+import { DevicesPage as PersistentDevicesPage } from "@/components/devices-page";
 import { MeterPage } from "@/components/meter-page";
 
 export type Section = "today" | "calendar" | "devices" | "meter" | "reconciliation" | "analytics" | "settings";
@@ -82,8 +84,8 @@ function SettingsPage() {
 
 export function SectionContent({ section }: { section: Section }) {
   if (section === "today") return <TodayPage />;
-  if (section === "calendar") return <CalendarPage />;
-  if (section === "devices") return <DevicesPage />;
+  if (section === "calendar") return <PersistentCalendarPage />;
+  if (section === "devices") return <PersistentDevicesPage />;
   if (section === "meter") return <MeterPage />;
   if (section === "reconciliation") return <ReconciliationPage />;
   if (section === "analytics") return <AnalyticsPage />;
