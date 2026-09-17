@@ -2,6 +2,7 @@ import { consumptionKwh, ensureReferenceData, getD1, weekdayForDate } from "@/li
 import { ensureMainMeter, errorResponse, MAIN_METER_ID, microsToDecimal, slotDate, slotFromDate, validateDate, ValidationError } from "@/lib/energy-db";
 import { getAppSettings, settingsDto } from "@/lib/settings-db";
 import { assertRangeEditable } from "@/lib/day-workflow";
+import { distributeMicros, isReconciliationAnomaly, selectEffectiveTariff } from "@/lib/energy-math";
 
 type Reading = { reading_date: string; reading_hour: number; value_micros: number };
 type Manual = { date: string; hour: number; consumption_micros: number };
@@ -60,20 +61,19 @@ async function calculateInterval(db: D1Database, left: Reading, right: Reading) 
   const manualSum = manuals.results.reduce((sum, row) => sum + row.consumption_micros, 0);
   const automaticCount = intervalHours - manuals.results.length;
   if (manualSum > delta || automaticCount < 0 || (automaticCount === 0 && manualSum !== delta)) return [];
-  const base = automaticCount ? Math.floor((delta - manualSum) / automaticCount) : 0;
-  let remainder = automaticCount ? delta - manualSum - base * automaticCount : 0;
+  const manualByIndex = new Map<number, number>();
+  for (let index = 0; index < intervalHours; index += 1) {
+    const slot = slotFromDate(new Date(start.getTime() + index * 3_600_000));
+    const manual = manualBySlot.get(`${slot.date}:${slot.hour}`);
+    if (manual) manualByIndex.set(index, manual.consumption_micros);
+  }
+  const distributed = distributeMicros(delta, intervalHours, manualByIndex);
+  if (!distributed) return [];
   const result: Array<{ date: string; hour: number; actualMicros: number; quality: string }> = [];
   for (let index = 0; index < intervalHours; index += 1) {
     const slot = slotFromDate(new Date(start.getTime() + index * 3_600_000));
     const manual = manualBySlot.get(`${slot.date}:${slot.hour}`);
-    let actualMicros = manual?.consumption_micros ?? base;
-    if (!manual && remainder > 0) {
-      const laterAutomatic = Array.from({ length: intervalHours - index - 1 }, (_, offset) => {
-        const later = slotFromDate(new Date(start.getTime() + (index + offset + 1) * 3_600_000));
-        return !manualBySlot.has(`${later.date}:${later.hour}`);
-      }).some(Boolean);
-      if (!laterAutomatic) { actualMicros += remainder; remainder = 0; }
-    }
+    const actualMicros = distributed[index];
     result.push({ ...slot, actualMicros, quality: manual ? "MANUAL" : intervalHours === 1 ? "EXACT" : "INTERPOLATED" });
   }
   return result;
@@ -140,9 +140,9 @@ export async function buildCalculation(db: D1Database, from: string, to: string)
     const errorMessage = (calculationErrors.get(key) ?? []).join("; ");
     const deltaMicros = fact ? fact.micros - devicesMicros : null;
     const deltaPercent = fact && fact.micros !== 0 && deltaMicros !== null ? deltaMicros / fact.micros * 100 : null;
-    const anomaly = deltaMicros !== null && Math.abs(deltaMicros) > absoluteToleranceMicros && (deltaPercent === null || Math.abs(deltaPercent) > percentTolerance);
+    const anomaly = isReconciliationAnomaly(deltaMicros, fact?.micros ?? null, absoluteToleranceMicros, percentTolerance);
     const status = errorMessage ? "CALCULATION_ERROR" : !fact ? "MISSING" : !anomaly ? "NORMAL" : deltaMicros! > 0 ? "UNALLOCATED" : "MODEL_HIGH";
-    const tariff = tariffs.results.findLast(item => item.valid_from_date <= slot.date) ?? null;
+    const tariff = selectEffectiveTariff(tariffs.results, slot.date);
     const actualCostMicros = fact && tariff ? costMicros(fact.micros, tariff.price_micros) : null;
     const devicesCostMicros = tariff ? costMicros(devicesMicros, tariff.price_micros) : null;
     const unallocatedMicros = deltaMicros === null ? null : Math.max(deltaMicros, 0);

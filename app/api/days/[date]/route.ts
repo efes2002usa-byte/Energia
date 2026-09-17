@@ -65,5 +65,5 @@ export async function POST(request: Request, { params }: { params: Promise<{ dat
 function errorResponse(error: unknown) {
   if (error instanceof ValidationError) return Response.json({ error: { code: error.code, message: error.message } }, { status: error.status });
   console.error(error);
-  return Response.json({ error: { code: "INTERNAL_ERROR", message: error instanceof Error ? error.message : "Неизвестная ошибка" } }, { status: 500 });
+  return Response.json({ error: { code: "INTERNAL_ERROR", message: "Внутренняя ошибка сервера" } }, { status: 500 });
 }
