@@ -1,8 +1,10 @@
 import { cleanName, deviceDto, DeviceRow, ensureReferenceData, getD1, parseConsumption, validateDate, validateHours, ValidationError } from "@/lib/device-db";
 import { errorResponse } from "@/lib/energy-db";
 import { enqueueExistingRange, existingEditableEnd } from "@/lib/recalculation-jobs";
+import { logApiDuration } from "@/lib/metrics";
 
 export async function GET() {
+  const startedAt = performance.now();
   try {
     const db = getD1();
     await ensureReferenceData(db);
@@ -22,13 +24,17 @@ export async function GET() {
       )
       ORDER BY d.is_archived ASC, d.name COLLATE NOCASE ASC
     `).all<DeviceRow>();
-    return Response.json({ devices: result.results.map(deviceDto) });
+    const response = Response.json({ devices: result.results.map(deviceDto) });
+    logApiDuration("devices", startedAt);
+    return response;
   } catch (error) {
+    logApiDuration("devices", startedAt, 500);
     return errorResponse(error);
   }
 }
 
 export async function POST(request: Request) {
+  const startedAt = performance.now();
   try {
     const payload = await request.json() as Record<string, unknown>;
     const name = cleanName(payload.name, "Название прибора");
@@ -63,8 +69,11 @@ export async function POST(request: Request) {
     ];
     await db.batch(statements);
     await enqueueExistingRange(db, activeFromDate, "DEVICE", description || "Создан прибор", affectedToDate);
-    return Response.json({ id: deviceId }, { status: 201 });
+    const response = Response.json({ id: deviceId }, { status: 201 });
+    logApiDuration("devices", startedAt, 201);
+    return response;
   } catch (error) {
+    logApiDuration("devices", startedAt, 500);
     return errorResponse(error);
   }
 }

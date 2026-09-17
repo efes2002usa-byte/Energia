@@ -3,6 +3,7 @@ import { ensureMainMeter, errorResponse, MAIN_METER_ID, microsToDecimal, slotDat
 import { getAppSettings, settingsDto } from "@/lib/settings-db";
 import { assertRangeEditable } from "@/lib/day-workflow";
 import { distributeMicros, isReconciliationAnomaly, selectEffectiveTariff } from "@/lib/energy-math";
+import { logApiDuration } from "@/lib/metrics";
 
 type Reading = { reading_date: string; reading_hour: number; value_micros: number };
 type Manual = { date: string; hour: number; consumption_micros: number };
@@ -207,16 +208,20 @@ export async function persistCalculation(db: D1Database, calculation: Awaited<Re
 }
 
 export async function GET(request: Request) {
+  const startedAt = performance.now();
   try {
     const { from, to } = readRange(request);
     const db = getD1();
     await Promise.all([ensureReferenceData(db), ensureMainMeter(db)]);
     const { allRows: _allRows, ...result } = await buildCalculation(db, from, to);
-    return Response.json(result);
-  } catch (error) { return errorResponse(error); }
+    const response = Response.json(result);
+    logApiDuration("reconciliation", startedAt);
+    return response;
+  } catch (error) { logApiDuration("reconciliation", startedAt, 500); return errorResponse(error); }
 }
 
 export async function POST(request: Request) {
+  const startedAt = performance.now();
   try {
     const { from, to } = readRange(request);
     const db = getD1();
@@ -225,6 +230,8 @@ export async function POST(request: Request) {
     const calculation = await buildCalculation(db, from, to);
     await persistCalculation(db, calculation);
     const { allRows: _allRows, ...result } = calculation;
-    return Response.json({ ...result, saved: true });
-  } catch (error) { return errorResponse(error); }
+    const response = Response.json({ ...result, saved: true });
+    logApiDuration("reconciliation", startedAt);
+    return response;
+  } catch (error) { logApiDuration("reconciliation", startedAt, 500); return errorResponse(error); }
 }

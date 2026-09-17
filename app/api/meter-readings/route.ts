@@ -1,8 +1,10 @@
 import { MAIN_METER_ID, ReadingRow, ValidationError, ensureMainMeter, errorResponse, getD1, parseDecimalToMicros, readingDto, validateDate, validateHour, validateManualInterval } from "@/lib/energy-db";
 import { assertRangeEditable } from "@/lib/day-workflow";
 import { enqueueRecalculation, previousSlot } from "@/lib/recalculation-jobs";
+import { logApiDuration } from "@/lib/metrics";
 
 export async function GET() {
+  const startedAt = performance.now();
   try {
     const db = getD1();
     await ensureMainMeter(db);
@@ -13,13 +15,17 @@ export async function GET() {
       ORDER BY reading_date DESC, reading_hour DESC
       LIMIT 500
     `).bind(MAIN_METER_ID).all<ReadingRow>();
-    return Response.json({ readings: result.results.map(readingDto) });
+    const response = Response.json({ readings: result.results.map(readingDto) });
+    logApiDuration("meter-readings", startedAt);
+    return response;
   } catch (error) {
+    logApiDuration("meter-readings", startedAt, 500);
     return errorResponse(error);
   }
 }
 
 export async function POST(request: Request) {
+  const startedAt = performance.now();
   try {
     const payload = await request.json() as { date?: string; hour?: number; valueKwh?: string; comment?: string };
     const date = validateDate(payload.date);
@@ -79,8 +85,11 @@ export async function POST(request: Request) {
       SELECT id, meter_id, reading_date, reading_hour, value_micros, comment, created_at, updated_at
       FROM meter_readings WHERE id = ?
     `).bind(id).first<ReadingRow>();
-    return Response.json({ reading: readingDto(row!) }, { status: 201 });
+    const response = Response.json({ reading: readingDto(row!) }, { status: 201 });
+    logApiDuration("meter-readings", startedAt, 201);
+    return response;
   } catch (error) {
+    logApiDuration("meter-readings", startedAt, 500);
     return errorResponse(error);
   }
 }
