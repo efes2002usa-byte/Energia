@@ -5,7 +5,6 @@ const nextConfig: NextConfig = {
   // the shorter internal paths. Rewrites preserve methods, headers and bodies.
   async rewrites() {
     return [
-      { source: "/api/v1/:path*", destination: "/api/:path*" },
       { source: "/api/analytics/dashboard", destination: "/api/analytics" },
       { source: "/api/analytics/hourly-reconciliation", destination: "/api/reconciliation" },
       { source: "/api/analytics/daily-trend", destination: "/api/analytics" },
