@@ -1,5 +1,6 @@
 import { assertExpectedUpdatedAt, errorResponse, getD1, parseDecimalToMicros, ValidationError } from "@/lib/energy-db";
 import { getAppSettings, SETTINGS_ID, settingsDto } from "@/lib/settings-db";
+import { logApiDuration } from "@/lib/metrics";
 
 function validateTimezone(value: unknown) {
   const timezone = String(value ?? "").trim();
@@ -15,13 +16,17 @@ function validateHour(value: unknown, label: string) {
 }
 
 export async function GET() {
+  const startedAt = performance.now();
   try {
     const db = getD1();
-    return Response.json({ settings: settingsDto(await getAppSettings(db)) });
-  } catch (error) { return errorResponse(error); }
+    const response = Response.json({ settings: settingsDto(await getAppSettings(db)) });
+    logApiDuration("settings", startedAt);
+    return response;
+  } catch (error) { logApiDuration("settings", startedAt, 500); return errorResponse(error); }
 }
 
 export async function PATCH(request: Request) {
+  const startedAt = performance.now();
   try {
     const payload = await request.json() as Record<string, unknown>;
     const facilityName = String(payload.facilityName ?? "").trim();
@@ -50,6 +55,8 @@ export async function PATCH(request: Request) {
         VALUES (?, 'APP_SETTINGS', ?, 'UPDATE', ?, ?, 'Изменение параметров объекта', 'ADMIN', ?)`)
         .bind(crypto.randomUUID(), SETTINGS_ID, JSON.stringify(before), JSON.stringify(after), now),
     ]);
-    return Response.json({ settings: settingsDto(await getAppSettings(db)) });
-  } catch (error) { return errorResponse(error); }
+    const response = Response.json({ settings: settingsDto(await getAppSettings(db)) });
+    logApiDuration("settings", startedAt);
+    return response;
+  } catch (error) { logApiDuration("settings", startedAt, 500); return errorResponse(error); }
 }

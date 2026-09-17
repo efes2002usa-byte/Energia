@@ -1,5 +1,6 @@
 import { errorResponse, getD1, microsToDecimal, parseDecimalToMicros, validateDate, ValidationError } from "@/lib/energy-db";
 import { enqueueExistingRange, existingEditableEnd } from "@/lib/recalculation-jobs";
+import { logApiDuration } from "@/lib/metrics";
 
 type TariffRow = {
   id: string;
@@ -25,6 +26,7 @@ function dto(row: TariffRow, today: string) {
 }
 
 export async function GET() {
+  const startedAt = performance.now();
   try {
     const db = getD1();
     const today = new Date().toISOString().slice(0, 10);
@@ -40,13 +42,17 @@ export async function GET() {
       FROM tariff_versions t
       ORDER BY t.valid_from_date DESC
     `).all<TariffRow>();
-    return Response.json({ tariffs: result.results.map(row => dto(row, today)) });
+    const response = Response.json({ tariffs: result.results.map(row => dto(row, today)) });
+    logApiDuration("tariffs", startedAt);
+    return response;
   } catch (error) {
+    logApiDuration("tariffs", startedAt, 500);
     return errorResponse(error);
   }
 }
 
 export async function POST(request: Request) {
+  const startedAt = performance.now();
   try {
     const payload = await request.json() as { validFromDate?: string; pricePerKwh?: string; comment?: string };
     const validFromDate = validateDate(payload.validFromDate);
@@ -71,8 +77,11 @@ export async function POST(request: Request) {
         .bind(crypto.randomUUID(), id, afterData, comment, now),
     ]);
     await enqueueExistingRange(db, validFromDate, "TARIFF", comment || "Добавлена версия тарифа", affectedToDate);
-    return Response.json({ tariff: { id, validFromDate, pricePerKwh: microsToDecimal(priceMicros), comment, createdAt: now } }, { status: 201 });
+    const response = Response.json({ tariff: { id, validFromDate, pricePerKwh: microsToDecimal(priceMicros), comment, createdAt: now } }, { status: 201 });
+    logApiDuration("tariffs", startedAt, 201);
+    return response;
   } catch (error) {
+    logApiDuration("tariffs", startedAt, 500);
     return errorResponse(error);
   }
 }

@@ -1,11 +1,13 @@
 import { cleanName, ensureReferenceData, getD1, normalizeName, ReferenceRow, ValidationError } from "@/lib/device-db";
 import { errorResponse } from "@/lib/energy-db";
+import { logApiDuration } from "@/lib/metrics";
 
 function dto(row: ReferenceRow) {
   return { id: row.id, name: row.name, description: row.description, sortOrder: row.sort_order, isActive: Boolean(row.is_active), isSystem: Boolean(row.is_system), deviceCount: row.device_count ?? 0 };
 }
 
 export async function GET() {
+  const startedAt = performance.now();
   try {
     const db = getD1();
     await ensureReferenceData(db);
@@ -21,13 +23,17 @@ export async function GET() {
         GROUP BY c.id ORDER BY c.is_active DESC, c.sort_order ASC, c.name ASC
       `).all<ReferenceRow>(),
     ]);
-    return Response.json({ zones: zones.results.map(dto), categories: categories.results.map(dto) });
+    const response = Response.json({ zones: zones.results.map(dto), categories: categories.results.map(dto) });
+    logApiDuration("references", startedAt);
+    return response;
   } catch (error) {
+    logApiDuration("references", startedAt, 500);
     return errorResponse(error);
   }
 }
 
 export async function POST(request: Request) {
+  const startedAt = performance.now();
   try {
     const payload = await request.json() as { kind?: string; name?: unknown; description?: unknown; sortOrder?: unknown };
     const kind = payload.kind;
@@ -54,8 +60,11 @@ export async function POST(request: Request) {
         db.prepare(`INSERT INTO audit_log (id, entity_type, entity_id, action, after_data, comment, source, created_at) VALUES (?, 'DEVICE_CATEGORY', ?, 'CREATE', ?, ?, 'ADMIN', ?)`).bind(crypto.randomUUID(), id, JSON.stringify({ name, description, sortOrder }), description, now),
       ]);
     }
-    return Response.json({ id, name, description, sortOrder, isActive: true, isSystem: false, deviceCount: 0 }, { status: 201 });
+    const response = Response.json({ id, name, description, sortOrder, isActive: true, isSystem: false, deviceCount: 0 }, { status: 201 });
+    logApiDuration("references", startedAt, 201);
+    return response;
   } catch (error) {
+    logApiDuration("references", startedAt, 500);
     return errorResponse(error);
   }
 }
