@@ -1,4 +1,5 @@
 import { MAIN_METER_ID, ReadingRow, ValidationError, ensureMainMeter, errorResponse, getD1, parseDecimalToMicros, readingDto, validateDate, validateHour, validateManualInterval } from "@/lib/energy-db";
+import { assertRangeEditable } from "@/lib/day-workflow";
 
 export async function GET() {
   try {
@@ -42,6 +43,7 @@ export async function POST(request: Request) {
       WHERE meter_id = ? AND (reading_date > ? OR (reading_date = ? AND reading_hour > ?))
       ORDER BY reading_date ASC, reading_hour ASC LIMIT 1
     `).bind(MAIN_METER_ID, date, date, hour).first<ReadingRow>();
+    await assertRangeEditable(db, previous?.reading_date ?? date, next?.reading_date ?? date);
 
     if (previous && valueMicros < previous.value_micros) {
       throw new ValidationError("READING_BELOW_PREVIOUS", "Показание меньше предыдущего");

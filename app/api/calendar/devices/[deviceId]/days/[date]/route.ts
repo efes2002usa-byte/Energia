@@ -1,5 +1,6 @@
 import { getD1, validateDate, validateHours, ValidationError, weekdayForDate } from "@/lib/device-db";
 import { errorResponse } from "@/lib/energy-db";
+import { assertDayEditable } from "@/lib/day-workflow";
 
 export async function GET(_request: Request, { params }: { params: Promise<{ deviceId: string; date: string }> }) {
   try {
@@ -27,6 +28,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ devi
     let hours = validateHours(payload.hours);
     const source = payload.source === "DEFAULT" ? "DEFAULT" : "MANUAL";
     const db = getD1();
+    await assertDayEditable(db, date);
     const device = await db.prepare(`SELECT id FROM devices WHERE id = ? AND active_from_date <= ? AND (inactive_from_date IS NULL OR inactive_from_date > ?)`).bind(deviceId, date, date).first<{ id: string }>();
     if (!device) throw new ValidationError("DEVICE_NOT_ACTIVE", "Прибор не активен в выбранную дату", 409);
     if (source === "DEFAULT") {

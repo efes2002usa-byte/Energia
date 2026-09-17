@@ -1,4 +1,5 @@
 import { MAIN_METER_ID, ManualRow, ReadingRow, ValidationError, errorResponse, getD1, hoursBetween, microsToDecimal, parseDecimalToMicros, validateDate, validateHour } from "@/lib/energy-db";
+import { assertDayEditable } from "@/lib/day-workflow";
 
 async function intervalBounds(db: D1Database, date: string, hour: number) {
   const left = await db.prepare(`
@@ -25,6 +26,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ date
     const comment = String(payload.comment ?? "").trim();
     if (!comment) throw new ValidationError("COMMENT_REQUIRED", "Для ручного значения обязателен комментарий");
     const db = getD1();
+    await assertDayEditable(db, date);
     const { left, right } = await intervalBounds(db, date, hour);
     const intervalHours = hoursBetween(left, right);
     const delta = right.value_micros - left.value_micros;
@@ -71,6 +73,7 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
     const date = validateDate(route.date);
     const hour = validateHour(route.hour);
     const db = getD1();
+    await assertDayEditable(db, date);
     const existing = await db.prepare(`SELECT * FROM manual_hourly_consumption WHERE meter_id = ? AND date = ? AND hour = ?`).bind(MAIN_METER_ID, date, hour).first<ManualRow>();
     if (!existing) throw new ValidationError("NOT_FOUND", "Ручное значение не найдено", 404);
     const now = new Date().toISOString();

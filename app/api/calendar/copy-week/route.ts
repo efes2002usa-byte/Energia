@@ -1,6 +1,7 @@
 import { addDays, buildCopyPlan, copySummary, executeCopy, validateDeviceIds } from "@/lib/calendar-copy";
 import { validateDate, ValidationError, weekdayForDate } from "@/lib/device-db";
 import { errorResponse } from "@/lib/energy-db";
+import { assertRangeEditable } from "@/lib/day-workflow";
 
 export async function POST(request: Request) {
   try {
@@ -14,6 +15,7 @@ export async function POST(request: Request) {
     const { db, plan } = await buildCopyPlan(deviceIds, pairs);
     const summary = copySummary(plan);
     if (payload.preview) return Response.json({ preview: true, ...summary });
+    await assertRangeEditable(db, targetWeekStart, addDays(targetWeekStart, 6));
     if (!payload.overwrite && summary.conflicts.length > 0) return Response.json({ error: { code: "COPY_CONFLICT", message: "В целевой неделе есть сохранённые расписания" }, ...summary }, { status: 409 });
     await executeCopy(db, plan, "COPY_WEEK");
     return Response.json({ copied: true, ...summary });

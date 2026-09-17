@@ -1,6 +1,7 @@
 import { buildCopyPlan, copySummary, executeCopy, validateDeviceIds } from "@/lib/calendar-copy";
 import { validateDate, ValidationError } from "@/lib/device-db";
 import { errorResponse } from "@/lib/energy-db";
+import { assertDayEditable } from "@/lib/day-workflow";
 
 export async function POST(request: Request) {
   try {
@@ -12,6 +13,7 @@ export async function POST(request: Request) {
     const { db, plan } = await buildCopyPlan(deviceIds, [{ sourceDate, targetDate }]);
     const summary = copySummary(plan);
     if (payload.preview) return Response.json({ preview: true, ...summary });
+    await assertDayEditable(db, targetDate);
     if (!payload.overwrite && summary.conflicts.length > 0) return Response.json({ error: { code: "COPY_CONFLICT", message: "В целевой дате уже есть сохранённое расписание" }, ...summary }, { status: 409 });
     await executeCopy(db, plan, "COPY_DAY");
     return Response.json({ copied: true, ...summary });

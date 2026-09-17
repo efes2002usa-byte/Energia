@@ -75,6 +75,19 @@ export const appSettings = sqliteTable("app_settings", {
   updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
 
+export const dayWorkflows = sqliteTable("day_workflows", {
+  date: text("date").primaryKey(),
+  status: text("status").notNull().default("EMPTY"),
+  scheduleCompletedAt: text("schedule_completed_at"),
+  confirmedAt: text("confirmed_at"),
+  confirmationComment: text("confirmation_comment").notNull().default(""),
+  unlockedAt: text("unlocked_at"),
+  unlockReason: text("unlock_reason").notNull().default(""),
+  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (table) => [
+  index("idx_day_workflows_status_date").on(table.status, table.date),
+]);
+
 export const zones = sqliteTable("zones", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),

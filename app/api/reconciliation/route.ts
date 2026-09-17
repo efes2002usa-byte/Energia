@@ -1,6 +1,7 @@
 import { consumptionKwh, ensureReferenceData, getD1, weekdayForDate } from "@/lib/device-db";
 import { ensureMainMeter, errorResponse, MAIN_METER_ID, microsToDecimal, slotDate, slotFromDate, validateDate, ValidationError } from "@/lib/energy-db";
 import { getAppSettings, settingsDto } from "@/lib/settings-db";
+import { assertRangeEditable } from "@/lib/day-workflow";
 
 type Reading = { reading_date: string; reading_hour: number; value_micros: number };
 type Manual = { date: string; hour: number; consumption_micros: number };
@@ -204,6 +205,7 @@ export async function POST(request: Request) {
     const { from, to } = readRange(request);
     const db = getD1();
     await Promise.all([ensureReferenceData(db), ensureMainMeter(db)]);
+    await assertRangeEditable(db, from, to);
     const calculation = await buildCalculation(db, from, to);
     await persistCalculation(db, calculation);
     const { allRows: _allRows, ...result } = calculation;

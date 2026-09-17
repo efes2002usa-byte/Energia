@@ -1,4 +1,5 @@
 import { MAIN_METER_ID, ReadingRow, ValidationError, errorResponse, getD1, parseDecimalToMicros, readingDto, validateManualInterval } from "@/lib/energy-db";
+import { assertRangeEditable } from "@/lib/day-workflow";
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -17,6 +18,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       SELECT * FROM meter_readings WHERE meter_id = ? AND (reading_date > ? OR (reading_date = ? AND reading_hour > ?))
       ORDER BY reading_date ASC, reading_hour ASC LIMIT 1
     `).bind(MAIN_METER_ID, current.reading_date, current.reading_date, current.reading_hour).first<ReadingRow>();
+    await assertRangeEditable(db, previous?.reading_date ?? current.reading_date, next?.reading_date ?? current.reading_date);
     if (previous && valueMicros < previous.value_micros) throw new ValidationError("READING_BELOW_PREVIOUS", "Показание меньше предыдущего");
     if (next && valueMicros > next.value_micros) throw new ValidationError("READING_ABOVE_NEXT", "Показание больше следующего");
     const candidate = { ...current, value_micros: valueMicros };
@@ -40,6 +42,9 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
     const db = getD1();
     const current = await db.prepare(`SELECT * FROM meter_readings WHERE id = ? AND meter_id = ?`).bind(id, MAIN_METER_ID).first<ReadingRow>();
     if (!current) throw new ValidationError("NOT_FOUND", "Показание не найдено", 404);
+    const previous = await db.prepare(`SELECT reading_date FROM meter_readings WHERE meter_id = ? AND (reading_date < ? OR (reading_date = ? AND reading_hour < ?)) ORDER BY reading_date DESC, reading_hour DESC LIMIT 1`).bind(MAIN_METER_ID, current.reading_date, current.reading_date, current.reading_hour).first<{ reading_date: string }>();
+    const next = await db.prepare(`SELECT reading_date FROM meter_readings WHERE meter_id = ? AND (reading_date > ? OR (reading_date = ? AND reading_hour > ?)) ORDER BY reading_date ASC, reading_hour ASC LIMIT 1`).bind(MAIN_METER_ID, current.reading_date, current.reading_date, current.reading_hour).first<{ reading_date: string }>();
+    await assertRangeEditable(db, previous?.reading_date ?? current.reading_date, next?.reading_date ?? current.reading_date);
     const now = new Date().toISOString();
     await db.batch([
       db.prepare(`DELETE FROM meter_readings WHERE id = ?`).bind(id),
