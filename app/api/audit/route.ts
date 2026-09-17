@@ -1,4 +1,5 @@
 import { errorResponse, getD1, validateDate } from "@/lib/energy-db";
+import { logApiDuration } from "@/lib/metrics";
 
 type AuditRow = { id: string; entity_type: string; entity_id: string; action: string; before_data: string | null; after_data: string | null; comment: string; source: string; created_at: string };
 
@@ -8,6 +9,7 @@ function dto(row: AuditRow) {
 }
 
 export async function GET(request: Request) {
+  const startedAt = performance.now();
   try {
     const url = new URL(request.url);
     const page = Math.max(1, Number(url.searchParams.get("page") ?? 1));
@@ -28,6 +30,8 @@ export async function GET(request: Request) {
       db.prepare(`SELECT * FROM audit_log ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`).bind(...values, pageSize, (page - 1) * pageSize).all<AuditRow>(),
       db.prepare(`SELECT COUNT(*) AS count FROM audit_log ${where}`).bind(...values).first<{ count: number }>(),
     ]);
-    return Response.json({ entries: rows.results.map(dto), page, pageSize, total: Number(total?.count ?? 0) });
-  } catch (error) { return errorResponse(error); }
+    const response = Response.json({ entries: rows.results.map(dto), page, pageSize, total: Number(total?.count ?? 0) });
+    logApiDuration("audit", startedAt);
+    return response;
+  } catch (error) { logApiDuration("audit", startedAt, 500); return errorResponse(error); }
 }

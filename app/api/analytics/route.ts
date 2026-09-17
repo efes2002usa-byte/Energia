@@ -1,6 +1,7 @@
 import { buildCalculation } from "@/app/api/reconciliation/route";
 import { ensureReferenceData, getD1 } from "@/lib/device-db";
 import { ensureMainMeter, errorResponse, microsToDecimal, validateDate, ValidationError } from "@/lib/energy-db";
+import { logApiDuration } from "@/lib/metrics";
 
 type Row = Awaited<ReturnType<typeof buildCalculation>>["allRows"][number];
 type Detail = Row["details"][number];
@@ -31,6 +32,7 @@ function aggregate(rows: Row[], filters: { devices: Set<string>; categories: Set
 function nightHour(hour: number, from: number, to: number) { return from <= to ? hour >= from && hour < to : hour >= from || hour < to; }
 
 export async function GET(request: Request) {
+  const startedAt = performance.now();
   try {
     const { from, to } = readRange(request); const url = new URL(request.url);
     const db = getD1(); await Promise.all([ensureReferenceData(db), ensureMainMeter(db)]);
@@ -45,6 +47,8 @@ export async function GET(request: Request) {
     const second = url.searchParams.has("compareFrom") || url.searchParams.has("compareTo") ? readRange(request, "compareFrom", "compareTo") : { from: addDays(from, -(Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000) + 1)), to: addDays(from, -1) };
     const previous = await buildCalculation(db, second.from, second.to); const previousRows = previous.allRows.filter(row => completed(row, localNow(previous.settings.timezone))).map(row => ({ ...row, details: selectedDetails(row, filters) })); const previousActualMicros = previousRows.reduce((sum, row) => sum + (row.actualMicros ?? 0), 0); const previousDevicesMicros = previousRows.reduce((sum, row) => sum + row.details.reduce((sum, detail) => sum + detail.energyMicros, 0), 0);
     const currentAgg = aggregate(rows, filters); const previousAgg = aggregate(previousRows, filters); const previousByCategory = new Map(previousAgg.categories.map(item => [item.id, Number(item.energyKwh)])); const categoryContribution = currentAgg.categories.map(item => ({ ...item, previousEnergyKwh: previousByCategory.get(item.id) ?? "0", changeKwh: Number(item.energyKwh) - (previousByCategory.get(item.id) ?? 0) }));
-    return Response.json({ from, to, settings: calculation.settings, filters: { quality: requestedQuality }, options: { devices: currentAgg.devices, categories: currentAgg.categories, zones: currentAgg.zones }, summary: { actualKwh: microsToDecimal(actualMicros), devicesKwh: microsToDecimal(devicesMicros), coveragePercent: rows.length ? actualRows.length / rows.length * 100 : 0, completedHours: rows.length, coveredHours: actualRows.length, incomplete: rows.length < calculation.allRows.length || actualRows.length < rows.length, actualCost: actualRows.length && actualRows.every(row => row.actualCostMicros !== null) ? microsToDecimal(actualRows.reduce((sum, row) => sum + (row.actualCostMicros ?? 0), 0)) : null }, daily, heatmap, byDevice: currentAgg.devices, byCategory: currentAgg.categories, byZone: currentAgg.zones, night: { from: nightFrom, to: nightTo, actualKwh: microsToDecimal(nightActualMicros), devicesKwh: microsToDecimal(nightDevicesMicros), sharePercent: actualMicros ? nightActualMicros / actualMicros * 100 : null }, compare: { from: second.from, to: second.to, actualKwh: microsToDecimal(previousActualMicros), devicesKwh: microsToDecimal(previousDevicesMicros), actualChangePercent: previousActualMicros ? (actualMicros - previousActualMicros) / previousActualMicros * 100 : null, categoryContribution }, errors: calculation.errors });
-  } catch (error) { return errorResponse(error); }
+    const response = Response.json({ from, to, settings: calculation.settings, filters: { quality: requestedQuality }, options: { devices: currentAgg.devices, categories: currentAgg.categories, zones: currentAgg.zones }, summary: { actualKwh: microsToDecimal(actualMicros), devicesKwh: microsToDecimal(devicesMicros), coveragePercent: rows.length ? actualRows.length / rows.length * 100 : 0, completedHours: rows.length, coveredHours: actualRows.length, incomplete: rows.length < calculation.allRows.length || actualRows.length < rows.length, actualCost: actualRows.length && actualRows.every(row => row.actualCostMicros !== null) ? microsToDecimal(actualRows.reduce((sum, row) => sum + (row.actualCostMicros ?? 0), 0)) : null }, daily, heatmap, byDevice: currentAgg.devices, byCategory: currentAgg.categories, byZone: currentAgg.zones, night: { from: nightFrom, to: nightTo, actualKwh: microsToDecimal(nightActualMicros), devicesKwh: microsToDecimal(nightDevicesMicros), sharePercent: actualMicros ? nightActualMicros / actualMicros * 100 : null }, compare: { from: second.from, to: second.to, actualKwh: microsToDecimal(previousActualMicros), devicesKwh: microsToDecimal(previousDevicesMicros), actualChangePercent: previousActualMicros ? (actualMicros - previousActualMicros) / previousActualMicros * 100 : null, categoryContribution }, errors: calculation.errors });
+    logApiDuration("analytics", startedAt);
+    return response;
+  } catch (error) { logApiDuration("analytics", startedAt, error instanceof ValidationError ? error.status : 500); return errorResponse(error); }
 }

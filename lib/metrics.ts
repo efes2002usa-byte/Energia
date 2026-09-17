@@ -6,3 +6,7 @@ export function elapsedMs(startedAt: number) {
 export function logMetric(name: string, fields: Record<string, unknown> = {}) {
   console.info(JSON.stringify({ metric: name, ...fields }));
 }
+
+export function logApiDuration(route: string, startedAt: number, status = 200) {
+  logMetric("api.request.duration", { route, status, durationMs: elapsedMs(startedAt) });
+}

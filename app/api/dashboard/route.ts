@@ -1,6 +1,7 @@
 import { buildCalculation } from "@/app/api/reconciliation/route";
 import { ensureReferenceData, getD1 } from "@/lib/device-db";
 import { ensureMainMeter, errorResponse, microsToDecimal, validateDate, ValidationError } from "@/lib/energy-db";
+import { logApiDuration } from "@/lib/metrics";
 
 function addDays(date: string, amount: number) {
   const value = new Date(`${date}T12:00:00Z`);
@@ -41,6 +42,7 @@ function sumNullable<T>(rows: T[], value: (row: T) => number | null) {
 }
 
 export async function GET(request: Request) {
+  const startedAt = performance.now();
   try {
     const { from, to } = readRange(request);
     const db = getD1();
@@ -100,7 +102,7 @@ export async function GET(request: Request) {
     }));
     const lastCalculation = await db.prepare(`SELECT MAX(calculated_at) AS calculated_at FROM hourly_reconciliation`).first<{ calculated_at: string | null }>();
 
-    return Response.json({
+    const response = Response.json({
       from,
       to,
       generatedAt: new Date().toISOString(),
@@ -132,7 +134,10 @@ export async function GET(request: Request) {
       alerts,
       errors: calculation.errors,
     });
+    logApiDuration("dashboard", startedAt);
+    return response;
   } catch (error) {
+    logApiDuration("dashboard", startedAt, error instanceof ValidationError ? error.status : 500);
     return errorResponse(error);
   }
 }
