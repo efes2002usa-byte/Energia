@@ -29,6 +29,13 @@
       "when": 1789592217455,
       "tag": "0003_new_guardian",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1789636961226,
+      "tag": "0004_regular_freak",
+      "breakpoints": true
     }
   ]
 }

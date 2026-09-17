@@ -63,6 +63,18 @@ export const tariffVersions = sqliteTable("tariff_versions", {
   index("idx_tariff_versions_effective_date").on(table.validFromDate),
 ]);
 
+export const appSettings = sqliteTable("app_settings", {
+  id: text("id").primaryKey(),
+  facilityName: text("facility_name").notNull(),
+  timezone: text("timezone").notNull(),
+  currencyCode: text("currency_code").notNull(),
+  percentageToleranceMicros: integer("percentage_tolerance_micros").notNull(),
+  absoluteToleranceMicros: integer("absolute_tolerance_micros").notNull(),
+  closedFromHour: integer("closed_from_hour").notNull(),
+  closedToHour: integer("closed_to_hour").notNull(),
+  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
 export const zones = sqliteTable("zones", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
