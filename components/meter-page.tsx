@@ -176,7 +176,7 @@ export function MeterPage() {
       const response = await fetch(`/api/meter-readings/${editReading.id}`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ valueKwh: data.get("valueKwh"), comment: data.get("comment") }),
+        body: JSON.stringify({ valueKwh: data.get("valueKwh"), comment: data.get("comment"), expectedUpdatedAt: editReading.updatedAt }),
       });
       await readJson(response);
       setEditReading(null);
@@ -267,7 +267,7 @@ export function MeterPage() {
       <Button className="rounded-xl bg-[#153d59] text-white" onClick={() => { setError(""); setAddOpen(true); }}><Plus size={16} />Добавить показание</Button>
     </div>
 
-    {error && <div className="mb-4 flex items-start gap-3 rounded-2xl border border-[#efc7bd] bg-[#fff4f1] p-4 text-sm text-[#8c3f2c]" role="alert"><AlertCircle className="mt-0.5 shrink-0" size={17} />{error}</div>}
+    {error && <div className="mb-4 flex flex-wrap items-center gap-3 rounded-2xl border border-[#efc7bd] bg-[#fff4f1] p-4 text-sm text-[#8c3f2c]" role="alert"><AlertCircle className="mt-0.5 shrink-0" size={17} /><span className="flex-1">{error}</span><Button variant="outline" size="sm" onClick={() => void loadReadings()}><RefreshCw size={15} />Повторить</Button></div>}
     {notice && <div className="mb-4 flex items-start gap-3 rounded-2xl border border-[#bfe2d6] bg-[#eef8f4] p-4 text-sm text-[#28745f]" role="status"><CheckCircle2 className="mt-0.5 shrink-0" size={17} />{notice}</div>}
 
     <div className="grid gap-4 sm:grid-cols-3">

@@ -1,5 +1,5 @@
 import { cleanName, deviceDto, getD1, getDevice, microsToDecimal, ValidationError } from "@/lib/device-db";
-import { errorResponse } from "@/lib/energy-db";
+import { assertExpectedUpdatedAt, errorResponse } from "@/lib/energy-db";
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -34,10 +34,11 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
-    const payload = await request.json() as { name?: unknown; description?: unknown };
+    const payload = await request.json() as { name?: unknown; description?: unknown; expectedUpdatedAt?: unknown };
     const db = getD1();
     const existing = await db.prepare(`SELECT * FROM devices WHERE id = ?`).bind(id).first<Record<string, unknown>>();
     if (!existing) throw new ValidationError("NOT_FOUND", "Прибор не найден", 404);
+    assertExpectedUpdatedAt(payload, existing.updated_at);
     const name = payload.name === undefined ? String(existing.name) : cleanName(payload.name, "Название прибора");
     const description = payload.description === undefined ? String(existing.description ?? "") : String(payload.description ?? "").trim();
     const now = new Date().toISOString();

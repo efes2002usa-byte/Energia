@@ -101,9 +101,22 @@ export async function buildCalculation(db: D1Database, from: string, to: string)
     for (const device of devices.results) {
       if (date < device.active_from_date || (device.inactive_from_date && date >= device.inactive_from_date)) continue;
       const marker = await db.prepare(`SELECT 1 AS present FROM device_schedule_days WHERE device_id = ? AND date = ?`).bind(device.id, date).first<{ present: number }>();
-      const onHours = marker
-        ? await db.prepare(`SELECT hour FROM device_on_hour WHERE device_id = ? AND date = ? ORDER BY hour`).bind(device.id, date).all<{ hour: number }>()
-        : await db.prepare(`SELECT hour FROM device_default_schedule WHERE device_id = ? AND weekday = ? ORDER BY hour`).bind(device.id, weekdayForDate(date)).all<{ hour: number }>();
+      let onHours: { results: Array<{ hour: number }> };
+      if (marker) {
+        onHours = await db.prepare(`SELECT hour FROM device_on_hour WHERE device_id = ? AND date = ? ORDER BY hour`).bind(device.id, date).all<{ hour: number }>();
+      } else {
+        const defaults = await db.prepare(`SELECT hour FROM device_default_schedule WHERE device_id = ? AND weekday = ? ORDER BY hour`).bind(device.id, weekdayForDate(date)).all<{ hour: number }>();
+        // Freeze the weekly template for this concrete day before calculating it.
+        // Subsequent recalculations therefore use the same DeviceOnHour snapshot.
+        if (defaults.results.length) {
+          const now = new Date().toISOString();
+          await db.batch([
+            db.prepare(`INSERT OR IGNORE INTO device_schedule_days (device_id, date, source, created_at, updated_at) VALUES (?, ?, 'DEFAULT', ?, ?)`).bind(device.id, date, now, now),
+            ...defaults.results.map(({ hour }) => db.prepare(`INSERT OR IGNORE INTO device_on_hour (device_id, date, hour, source, created_at, updated_at) VALUES (?, ?, ?, 'DEFAULT', ?, ?)`).bind(device.id, date, hour, now, now)),
+          ]);
+        }
+        onHours = defaults;
+      }
       const effective = await db.prepare(`SELECT
         pv.id AS placement_version_id, pv.zone_id, z.name AS zone_name, pv.category_id, c.name AS category_name,
         cv.id AS consumption_version_id, cv.mode, cv.consumption_per_hour_micros, cv.nominal_power_micros, cv.load_factor_ppm, cv.quantity

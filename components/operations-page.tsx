@@ -73,7 +73,7 @@ export function OperationsPage() {
   }
 
   return <>
-    {error && <div role="alert" className="mb-4 flex items-start gap-3 rounded-2xl border border-[#efc7bd] bg-[#fff4f1] p-4 text-sm text-[#8c3f2c]"><AlertCircle size={17} />{error}</div>}
+    {error && <div role="alert" className="mb-4 flex flex-wrap items-center gap-3 rounded-2xl border border-[#efc7bd] bg-[#fff4f1] p-4 text-sm text-[#8c3f2c]"><AlertCircle size={17} /><span className="flex-1">{error}</span><Button variant="outline" size="sm" onClick={() => void loadAll()}><RefreshCw size={15} />Повторить</Button></div>}
     {notice && <div role="status" className="mb-4 flex items-start gap-3 rounded-2xl border border-[#bfe2d6] bg-[#eef8f4] p-4 text-sm text-[#28745f]"><CheckCircle2 size={17} />{notice}</div>}
     <Tabs defaultValue="recalculation"><TabsList className="mb-4 h-auto rounded-xl bg-[#e7eef0] p-1"><TabsTrigger value="recalculation"><Activity size={15} />Пересчёт</TabsTrigger><TabsTrigger value="audit"><Clock3 size={15} />Журнал изменений</TabsTrigger></TabsList>
       <TabsContent value="recalculation" className="grid gap-4">

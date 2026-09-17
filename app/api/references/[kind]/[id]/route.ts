@@ -1,5 +1,5 @@
 import { cleanName, getD1, normalizeName, ValidationError } from "@/lib/device-db";
-import { errorResponse } from "@/lib/energy-db";
+import { assertExpectedUpdatedAt, errorResponse } from "@/lib/energy-db";
 
 function resolveKind(kind: string) {
   if (kind === "zones") return { table: "zones", entityType: "ZONE" };
@@ -11,10 +11,11 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ ki
   try {
     const { kind, id } = await params;
     const { table, entityType } = resolveKind(kind);
-    const payload = await request.json() as { name?: unknown; description?: unknown; sortOrder?: unknown; isActive?: unknown };
+    const payload = await request.json() as { name?: unknown; description?: unknown; sortOrder?: unknown; isActive?: unknown; expectedUpdatedAt?: unknown };
     const db = getD1();
     const existing = await db.prepare(`SELECT * FROM ${table} WHERE id = ?`).bind(id).first<Record<string, unknown>>();
     if (!existing) throw new ValidationError("NOT_FOUND", "Запись справочника не найдена", 404);
+    assertExpectedUpdatedAt(payload, existing.updated_at);
     const name = payload.name === undefined ? String(existing.name) : cleanName(payload.name);
     const normalizedName = normalizeName(name);
     const duplicate = await db.prepare(`SELECT id FROM ${table} WHERE normalized_name = ? AND id <> ?`).bind(normalizedName, id).first<{ id: string }>();
@@ -29,7 +30,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ ki
       db.prepare(`UPDATE ${table} SET name = ?, normalized_name = ?, description = ?, sort_order = ?, is_active = ?, updated_at = ? WHERE id = ?`).bind(name, normalizedName, description, sortOrder, isActive, now, id),
       db.prepare(`INSERT INTO audit_log (id, entity_type, entity_id, action, before_data, after_data, comment, source, created_at) VALUES (?, ?, ?, 'UPDATE', ?, ?, ?, 'ADMIN', ?)`).bind(crypto.randomUUID(), entityType, id, JSON.stringify(existing), JSON.stringify({ name, description, sortOrder, isActive: Boolean(isActive) }), description, now),
     ]);
-    return Response.json({ id, name, description, sortOrder, isActive: Boolean(isActive), isSystem: Boolean(existing.is_system) });
+    return Response.json({ id, name, description, sortOrder, isActive: Boolean(isActive), isSystem: Boolean(existing.is_system), updatedAt: now });
   } catch (error) {
     return errorResponse(error);
   }

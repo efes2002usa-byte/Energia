@@ -1,5 +1,5 @@
 import { getD1, validateDate, validateHours, ValidationError, weekdayForDate } from "@/lib/device-db";
-import { errorResponse } from "@/lib/energy-db";
+import { assertExpectedUpdatedAt, errorResponse } from "@/lib/energy-db";
 import { assertDayEditable } from "@/lib/day-workflow";
 import { enqueueRecalculation } from "@/lib/recalculation-jobs";
 
@@ -11,11 +11,11 @@ export async function GET(_request: Request, { params }: { params: Promise<{ dev
     const db = getD1();
     const device = await db.prepare(`SELECT id FROM devices WHERE id = ? AND active_from_date <= ? AND (inactive_from_date IS NULL OR inactive_from_date > ?)`).bind(deviceId, date, date).first<{ id: string }>();
     if (!device) throw new ValidationError("DEVICE_NOT_ACTIVE", "Прибор не активен в выбранную дату", 409);
-    const marker = await db.prepare(`SELECT source FROM device_schedule_days WHERE device_id = ? AND date = ?`).bind(deviceId, date).first<{ source: string }>();
+    const marker = await db.prepare(`SELECT source, updated_at FROM device_schedule_days WHERE device_id = ? AND date = ?`).bind(deviceId, date).first<{ source: string; updated_at: string }>();
     const slots = marker
       ? await db.prepare(`SELECT hour FROM device_on_hour WHERE device_id = ? AND date = ? ORDER BY hour`).bind(deviceId, date).all<{ hour: number }>()
       : await db.prepare(`SELECT hour FROM device_default_schedule WHERE device_id = ? AND weekday = ? ORDER BY hour`).bind(deviceId, weekday).all<{ hour: number }>();
-    return Response.json({ deviceId, date, hours: slots.results.map(row => row.hour), source: marker?.source ?? "DEFAULT_PREVIEW", isMaterialized: Boolean(marker) });
+    return Response.json({ deviceId, date, hours: slots.results.map(row => row.hour), source: marker?.source ?? "DEFAULT_PREVIEW", isMaterialized: Boolean(marker), updatedAt: marker?.updated_at ?? null });
   } catch (error) {
     return errorResponse(error);
   }
@@ -25,13 +25,15 @@ export async function PUT(request: Request, { params }: { params: Promise<{ devi
   try {
     const { deviceId, date: rawDate } = await params;
     const date = validateDate(rawDate);
-    const payload = await request.json() as { hours?: unknown; source?: unknown };
+    const payload = await request.json() as { hours?: unknown; source?: unknown; expectedUpdatedAt?: unknown };
     let hours = validateHours(payload.hours);
     const source = payload.source === "DEFAULT" ? "DEFAULT" : "MANUAL";
     const db = getD1();
     await assertDayEditable(db, date);
     const device = await db.prepare(`SELECT id FROM devices WHERE id = ? AND active_from_date <= ? AND (inactive_from_date IS NULL OR inactive_from_date > ?)`).bind(deviceId, date, date).first<{ id: string }>();
     if (!device) throw new ValidationError("DEVICE_NOT_ACTIVE", "Прибор не активен в выбранную дату", 409);
+    const existingMarker = await db.prepare(`SELECT updated_at FROM device_schedule_days WHERE device_id = ? AND date = ?`).bind(deviceId, date).first<{ updated_at: string }>();
+    assertExpectedUpdatedAt(payload, existingMarker?.updated_at);
     if (source === "DEFAULT") {
       const weekday = weekdayForDate(date);
       const defaults = await db.prepare(`SELECT hour FROM device_default_schedule WHERE device_id = ? AND weekday = ? ORDER BY hour`).bind(deviceId, weekday).all<{ hour: number }>();
@@ -48,7 +50,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ devi
     const beforeHours = before.results.map(row => row.hour);
     const changed = [...new Set([...beforeHours.filter(hour => !hours.includes(hour)), ...hours.filter(hour => !beforeHours.includes(hour))])].sort((a, b) => a - b);
     if (changed.length) await enqueueRecalculation(db, { from: { date, hour: changed[0] }, to: { date, hour: changed.at(-1)! }, reason: "CALENDAR", comment: `Изменено расписание прибора ${deviceId}` });
-    return Response.json({ deviceId, date, hours, source, isMaterialized: true });
+    return Response.json({ deviceId, date, hours, source, isMaterialized: true, updatedAt: now });
   } catch (error) {
     return errorResponse(error);
   }

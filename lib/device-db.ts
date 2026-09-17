@@ -93,6 +93,7 @@ export function deviceDto(row: DeviceRow) {
     activeFromDate: row.active_from_date,
     inactiveFromDate: row.inactive_from_date,
     isArchived: Boolean(row.is_archived),
+    updatedAt: row.updated_at,
     zone: { id: row.zone_id, name: row.zone_name },
     category: { id: row.category_id, name: row.category_name },
     placementValidFrom: row.placement_valid_from,

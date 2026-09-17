@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AlertCircle, CalendarDays, Calculator, CheckCircle2, ChevronRight, Download, Gauge } from "lucide-react";
+import { AlertCircle, CalendarDays, Calculator, CheckCircle2, ChevronRight, Download, Gauge, RefreshCw } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -119,7 +119,7 @@ export function ReconciliationPage() {
         <Button className="h-11 rounded-xl bg-[#153d59] text-white" disabled={saving || loading} onClick={() => void load(true)}><Calculator size={16} />{saving ? "Сохраняем…" : "Пересчитать и сохранить"}</Button>
       </div>
     </div>
-    {error && <div className="mb-4 flex items-start gap-3 rounded-2xl border border-[#efc7bd] bg-[#fff4f1] p-4 text-sm text-[#8c3f2c]" role="alert"><AlertCircle className="mt-0.5 shrink-0" size={17} />{error}</div>}
+    {error && <div className="mb-4 flex flex-wrap items-center gap-3 rounded-2xl border border-[#efc7bd] bg-[#fff4f1] p-4 text-sm text-[#8c3f2c]" role="alert"><AlertCircle className="mt-0.5 shrink-0" size={17} /><span className="flex-1">{error}</span><Button variant="outline" size="sm" onClick={() => void load()}><RefreshCw size={15} />Повторить</Button></div>}
     {notice && <div className="mb-4 flex items-start gap-3 rounded-2xl border border-[#bfe2d6] bg-[#eef8f4] p-4 text-sm text-[#28745f]" role="status"><CheckCircle2 className="mt-0.5 shrink-0" size={17} />{notice}</div>}
     {data?.errors.length ? <div className="mb-4 rounded-2xl border border-[#f1d49f] bg-[#fff7e7] p-4 text-sm text-[#90600d]">{data.errors.join("; ")}</div> : null}
     <div className="grid gap-4 sm:grid-cols-4">

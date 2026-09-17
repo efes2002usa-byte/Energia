@@ -30,7 +30,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       db.prepare(`INSERT INTO audit_log (id, entity_type, entity_id, action, after_data, comment, source, created_at) VALUES (?, 'DEVICE_PLACEMENT_VERSION', ?, 'CREATE', ?, ?, 'ADMIN', ?)`).bind(crypto.randomUUID(), `${id}:${versionId}`, JSON.stringify({ validFromDate, zoneId, categoryId }), comment, now),
     ]);
     await enqueueExistingRange(db, validFromDate, "PLACEMENT", comment || "Изменено размещение прибора", affectedToDate);
-    return Response.json({ id: versionId }, { status: 201 });
+    return Response.json({ id: versionId, affectedRange: { from: validFromDate, to: affectedToDate } }, { status: 201 });
   } catch (error) {
     return errorResponse(error);
   }

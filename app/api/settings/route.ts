@@ -1,4 +1,4 @@
-import { errorResponse, getD1, parseDecimalToMicros, ValidationError } from "@/lib/energy-db";
+import { assertExpectedUpdatedAt, errorResponse, getD1, parseDecimalToMicros, ValidationError } from "@/lib/energy-db";
 import { getAppSettings, SETTINGS_ID, settingsDto } from "@/lib/settings-db";
 
 function validateTimezone(value: unknown) {
@@ -37,7 +37,9 @@ export async function PATCH(request: Request) {
     if (closedFromHour === closedToHour) throw new ValidationError("INVALID_CLOSED_RANGE", "Начало и конец закрытия не должны совпадать");
 
     const db = getD1();
-    const before = settingsDto(await getAppSettings(db));
+    const beforeRow = await getAppSettings(db);
+    assertExpectedUpdatedAt(payload, beforeRow.updated_at);
+    const before = settingsDto(beforeRow);
     const now = new Date().toISOString();
     const after = { facilityName, timezone, currencyCode, percentageTolerance: String(payload.percentageTolerance), absoluteToleranceKwh: String(payload.absoluteToleranceKwh), closedFromHour, closedToHour };
     await db.batch([

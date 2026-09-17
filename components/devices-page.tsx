@@ -125,16 +125,16 @@ export function DevicesPage() {
   async function addConsumptionVersion(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); if (!selectedId) return; setError(""); const form = event.currentTarget; const data = new FormData(form);
     try {
-      await fetch(`/api/devices/${selectedId}/consumption-versions`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ validFromDate: data.get("validFromDate"), mode: parameterMode, quantity: Number(data.get("quantity")), consumptionPerHourKwh: data.get("consumptionPerHourKwh"), nominalPowerKw: data.get("nominalPowerKw"), loadFactor: data.get("loadFactor"), comment: data.get("comment") }) }).then(json);
-      form.reset(); setNotice("Новая версия параметров сохранена."); await refreshDetail();
+      const result = await fetch(`/api/devices/${selectedId}/consumption-versions`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ validFromDate: data.get("validFromDate"), mode: parameterMode, quantity: Number(data.get("quantity")), consumptionPerHourKwh: data.get("consumptionPerHourKwh"), nominalPowerKw: data.get("nominalPowerKw"), loadFactor: data.get("loadFactor"), comment: data.get("comment") }) }).then(json<{ affectedRange?: { from: string; to: string | null } }>);
+      form.reset(); setNotice(result.affectedRange?.to ? `Новая версия параметров сохранена. Пересчёт: ${result.affectedRange.from} — ${result.affectedRange.to}.` : "Новая версия параметров сохранена. Для этой даты нет открытого диапазона пересчёта."); await refreshDetail();
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Не удалось создать версию"); }
   }
 
   async function addPlacementVersion(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); if (!selectedId) return; setError(""); const form = event.currentTarget; const data = new FormData(form);
     try {
-      await fetch(`/api/devices/${selectedId}/placement-versions`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ validFromDate: data.get("validFromDate"), zoneId: data.get("zoneId"), categoryId: data.get("categoryId"), comment: data.get("comment") }) }).then(json);
-      form.reset(); setNotice("Новая версия размещения сохранена."); await refreshDetail();
+      const result = await fetch(`/api/devices/${selectedId}/placement-versions`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ validFromDate: data.get("validFromDate"), zoneId: data.get("zoneId"), categoryId: data.get("categoryId"), comment: data.get("comment") }) }).then(json<{ affectedRange?: { from: string; to: string | null } }>);
+      form.reset(); setNotice(result.affectedRange?.to ? `Новая версия размещения сохранена. Пересчёт: ${result.affectedRange.from} — ${result.affectedRange.to}.` : "Новая версия размещения сохранена. Для этой даты нет открытого диапазона пересчёта."); await refreshDetail();
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Не удалось создать версию размещения"); }
   }
 
@@ -158,7 +158,7 @@ export function DevicesPage() {
       </div>
       <div className="flex gap-2"><Button variant="outline" className="rounded-xl" onClick={() => { setError(""); setReferencesOpen(true); }}><BookOpen size={16} />Зоны и категории</Button><Button className="rounded-xl bg-[#153d59] text-white" onClick={() => { setError(""); setAddOpen(true); }}><Plus size={16} />Добавить прибор</Button></div>
     </div>
-    {error && <div role="alert" className="mb-4 rounded-xl border border-[#efc7bd] bg-[#fff4f1] p-3 text-sm text-[#8c3f2c]">{error}</div>}
+    {error && <div role="alert" className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#efc7bd] bg-[#fff4f1] p-3 text-sm text-[#8c3f2c]"><span>{error}</span><Button variant="outline" size="sm" onClick={() => void load()}><RefreshCw size={15} />Повторить</Button></div>}
     {notice && <div role="status" className="mb-4 rounded-xl border border-[#bfe2d6] bg-[#eef8f4] p-3 text-sm text-[#28745f]">{notice}</div>}
     <div className="surface-card overflow-hidden">
       {loading ? <div className="flex items-center justify-center gap-2 p-10 text-sm text-[#718590]"><Loader2 className="animate-spin" size={17} />Загрузка приборов…</div> : filtered.length === 0 ? <div className="p-10 text-center"><p className="font-medium text-[#17374c]">Приборов пока нет</p><p className="mt-1 text-sm text-[#718590]">Добавьте первый прибор с параметрами потребления.</p></div> : <div className="overflow-x-auto"><Table><TableHeader><TableRow><TableHead>Прибор</TableHead><TableHead>Зона</TableHead><TableHead>Категория</TableHead><TableHead>Расход за час</TableHead><TableHead>Статус</TableHead><TableHead /></TableRow></TableHeader><TableBody>{filtered.map(device => <TableRow key={device.id}><TableCell><div><p className="font-medium text-[#17374c]">{device.name}</p><p className="max-w-64 truncate text-xs text-[#738792]">{device.description || `Работает с ${device.activeFromDate}`}</p></div></TableCell><TableCell><span className="flex items-center gap-1.5"><MapPin size={14} className="text-[#8497a2]" />{device.zone.name}</span></TableCell><TableCell>{device.category.name}</TableCell><TableCell>{formatKwh(device.consumption.calculatedPerHourKwh)} кВт⋅ч</TableCell><TableCell><Badge variant="outline" className={device.isArchived ? "border-[#d9dfe2] bg-[#f2f4f5] text-[#687982]" : "border-[#bfe2d6] bg-[#eef8f4] text-[#28745f]"}>{device.isArchived ? "Архив" : "Активен"}</Badge></TableCell><TableCell className="text-right"><Button variant="ghost" size="icon" aria-label={`Открыть ${device.name}`} onClick={() => void openDevice(device.id)}><ChevronRight size={17} /></Button></TableCell></TableRow>)}</TableBody></Table></div>}

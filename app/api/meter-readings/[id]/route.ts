@@ -1,14 +1,15 @@
-import { MAIN_METER_ID, ReadingRow, ValidationError, errorResponse, getD1, parseDecimalToMicros, readingDto, validateManualInterval } from "@/lib/energy-db";
+import { assertExpectedUpdatedAt, MAIN_METER_ID, ReadingRow, ValidationError, errorResponse, getD1, parseDecimalToMicros, readingDto, validateManualInterval } from "@/lib/energy-db";
 import { assertRangeEditable } from "@/lib/day-workflow";
 import { enqueueRecalculation, previousSlot } from "@/lib/recalculation-jobs";
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
-    const payload = await request.json() as { valueKwh?: string; comment?: string };
+    const payload = await request.json() as { valueKwh?: string; comment?: string; expectedUpdatedAt?: unknown };
     const db = getD1();
     const current = await db.prepare(`SELECT * FROM meter_readings WHERE id = ? AND meter_id = ?`).bind(id, MAIN_METER_ID).first<ReadingRow>();
     if (!current) throw new ValidationError("NOT_FOUND", "Показание не найдено", 404);
+    assertExpectedUpdatedAt(payload, current.updated_at);
     const valueMicros = payload.valueKwh === undefined ? current.value_micros : parseDecimalToMicros(payload.valueKwh, "Показание");
     const comment = payload.comment === undefined ? current.comment : String(payload.comment).trim();
     const previous = await db.prepare(`

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  assertExpectedUpdatedAt,
   distributeMicros,
   hoursBetween,
   isReconciliationAnomaly,
@@ -44,4 +45,9 @@ test("reconciliation anomaly requires both configured tolerances", () => {
   assert.equal(isReconciliationAnomaly(900_000, 10_000_000, 1_000_000, 5), false);
   assert.equal(isReconciliationAnomaly(1_100_000, 10_000_000, 1_000_000, 5), true);
   assert.equal(isReconciliationAnomaly(-1_100_000, 10_000_000, 1_000_000, 5), true);
+});
+
+test("optimistic locking rejects a stale update token", () => {
+  assert.doesNotThrow(() => assertExpectedUpdatedAt({ expectedUpdatedAt: "2026-09-17T12:00:00.000Z" }, "2026-09-17T12:00:00.000Z"));
+  assert.throws(() => assertExpectedUpdatedAt({ expectedUpdatedAt: "old" }, "new"), (error: unknown) => error instanceof Error && "code" in error && error.code === "CONCURRENT_UPDATE");
 });

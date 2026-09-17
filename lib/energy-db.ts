@@ -1,5 +1,6 @@
 import { env } from "cloudflare:workers";
 import {
+  assertExpectedUpdatedAt,
   hoursBetween,
   MICROS_PER_KWH,
   microsToDecimal,
@@ -12,6 +13,7 @@ import {
 } from "@/lib/energy-math";
 
 export {
+  assertExpectedUpdatedAt,
   hoursBetween,
   MICROS_PER_KWH,
   microsToDecimal,

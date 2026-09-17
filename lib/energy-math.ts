@@ -11,6 +11,13 @@ export class ValidationError extends Error {
   }
 }
 
+export function assertExpectedUpdatedAt(payload: Record<string, unknown>, actualUpdatedAt: unknown) {
+  if (payload.expectedUpdatedAt === undefined) return;
+  if (String(payload.expectedUpdatedAt) !== String(actualUpdatedAt ?? "")) {
+    throw new ValidationError("CONCURRENT_UPDATE", "Запись уже изменилась. Обновите данные и повторите операцию", 409);
+  }
+}
+
 export function parseDecimalToMicros(value: unknown, field = "Значение"): number {
   const normalized = String(value ?? "").trim().replace(",", ".");
   if (!/^\d+(?:\.\d{1,6})?$/.test(normalized)) {
