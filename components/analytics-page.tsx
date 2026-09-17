@@ -1,6 +1,6 @@
 "use client";
 
-import { Component, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertCircle, BarChart3, CheckCircle2, Moon, RefreshCw, SlidersHorizontal, TrendingDown, TrendingUp } from "lucide-react";
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Badge } from "@/components/ui/badge";
@@ -26,13 +26,6 @@ function addDays(date: string, amount: number) { const value = new Date(`${date}
 function energy(value: string | number | null) { return value === null ? "—" : Number(value).toLocaleString("ru-RU", { maximumFractionDigits: 3 }); }
 function dateLabel(date: string) { return new Intl.DateTimeFormat("ru-RU", { day: "2-digit", month: "2-digit" }).format(new Date(`${date}T12:00:00Z`)); }
 function money(value: string | null, currency: string) { return value === null ? "—" : new Intl.NumberFormat("ru-RU", { style: "currency", currency, maximumFractionDigits: 2 }).format(Number(value)); }
-
-type BoundaryState = { error: Error | null };
-export class AnalyticsPageBoundary extends Component<React.PropsWithChildren, BoundaryState> {
-  state: BoundaryState = { error: null };
-  static getDerivedStateFromError(error: Error): BoundaryState { return { error }; }
-  render() { return this.state.error ? <div className="surface-card border border-[#efc7bd] bg-[#fff4f1] p-5 text-sm text-[#8c3f2c]" role="alert"><strong className="block">Не удалось отобразить аналитику</strong><span>{this.state.error.message}</span></div> : this.props.children; }
-}
 
 export function AnalyticsPage() {
   const today = useMemo(() => new Date().toISOString().slice(0, 10), []);

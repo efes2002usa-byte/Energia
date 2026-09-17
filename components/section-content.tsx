@@ -16,7 +16,7 @@ import { MeterPage } from "@/components/meter-page";
 import { ReconciliationPage as PersistentReconciliationPage } from "@/components/reconciliation-page";
 import { SettingsPage as PersistentSettingsPage } from "@/components/settings-page";
 import { OperationsPage } from "@/components/operations-page";
-import { AnalyticsPageBoundary, AnalyticsPage } from "@/components/analytics-page";
+import { AnalyticsPage } from "@/components/analytics-page";
 
 export type Section = "today" | "calendar" | "devices" | "meter" | "reconciliation" | "analytics" | "operations" | "settings";
 
@@ -91,7 +91,7 @@ export function SectionContent({ section }: { section: Section }) {
   if (section === "devices") return <PersistentDevicesPage />;
   if (section === "meter") return <MeterPage />;
   if (section === "reconciliation") return <PersistentReconciliationPage />;
-  if (section === "analytics") return <AnalyticsPageBoundary><AnalyticsPage /></AnalyticsPageBoundary>;
+  if (section === "analytics") return <AnalyticsPage />;
   if (section === "operations") return <OperationsPage />;
   return <PersistentSettingsPage />;
 }
