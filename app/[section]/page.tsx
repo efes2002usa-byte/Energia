@@ -10,6 +10,7 @@ const sections = {
   meter: { title: "Счётчик", eyebrow: "Фактические данные", description: "Показания основного электросчётчика и интервалы расхода." },
   reconciliation: { title: "Сверка", eyebrow: "Факт и расчёт", description: "Почасовые расхождения за 15 сентября 2026." },
   analytics: { title: "Аналитика", eyebrow: "Динамика потребления", description: "Структура нагрузки и сравнение периодов." },
+  operations: { title: "Операции", eyebrow: "Контроль расчётов", description: "Ручной пересчёт, история заданий и неизменяемый журнал действий." },
   settings: { title: "Настройки", eyebrow: "Конфигурация Energia", description: "Параметры объекта, тарифы и справочники." },
 } as const;
 

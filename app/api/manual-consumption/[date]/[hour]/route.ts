@@ -1,5 +1,6 @@
 import { MAIN_METER_ID, ManualRow, ReadingRow, ValidationError, errorResponse, getD1, hoursBetween, microsToDecimal, parseDecimalToMicros, validateDate, validateHour } from "@/lib/energy-db";
-import { assertDayEditable } from "@/lib/day-workflow";
+import { assertDayEditable, assertRangeEditable } from "@/lib/day-workflow";
+import { enqueueRecalculation, previousSlot } from "@/lib/recalculation-jobs";
 
 async function intervalBounds(db: D1Database, date: string, hour: number) {
   const left = await db.prepare(`
@@ -28,6 +29,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ date
     const db = getD1();
     await assertDayEditable(db, date);
     const { left, right } = await intervalBounds(db, date, hour);
+    await assertRangeEditable(db, left.reading_date, right.reading_date);
     const intervalHours = hoursBetween(left, right);
     const delta = right.value_micros - left.value_micros;
     const existing = await db.prepare(`
@@ -61,6 +63,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ date
         VALUES (?, 'MANUAL_CONSUMPTION', ?, ?, ?, ?, ?, 'ADMIN', ?)
       `).bind(crypto.randomUUID(), entityId, existing ? "UPDATE" : "CREATE", existing ? JSON.stringify({ consumptionKwh: microsToDecimal(existing.consumption_micros), comment: existing.comment }) : null, JSON.stringify({ consumptionKwh: microsToDecimal(consumptionMicros), comment }), comment, now),
     ]);
+    await enqueueRecalculation(db, { from: { date: left.reading_date, hour: left.reading_hour }, to: previousSlot({ date: right.reading_date, hour: right.reading_hour }), reason: "MANUAL_CONSUMPTION", comment });
     return Response.json({ manualConsumption: { meterId: MAIN_METER_ID, date, hour, consumptionKwh: microsToDecimal(consumptionMicros), comment } });
   } catch (error) {
     return errorResponse(error);
@@ -74,6 +77,8 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
     const hour = validateHour(route.hour);
     const db = getD1();
     await assertDayEditable(db, date);
+    const { left, right } = await intervalBounds(db, date, hour);
+    await assertRangeEditable(db, left.reading_date, right.reading_date);
     const existing = await db.prepare(`SELECT * FROM manual_hourly_consumption WHERE meter_id = ? AND date = ? AND hour = ?`).bind(MAIN_METER_ID, date, hour).first<ManualRow>();
     if (!existing) throw new ValidationError("NOT_FOUND", "Ручное значение не найдено", 404);
     const now = new Date().toISOString();
@@ -81,6 +86,7 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
       db.prepare(`DELETE FROM manual_hourly_consumption WHERE meter_id = ? AND date = ? AND hour = ?`).bind(MAIN_METER_ID, date, hour),
       db.prepare(`INSERT INTO audit_log (id, entity_type, entity_id, action, before_data, comment, source, created_at) VALUES (?, 'MANUAL_CONSUMPTION', ?, 'DELETE', ?, ?, 'ADMIN', ?)`).bind(crypto.randomUUID(), `${MAIN_METER_ID}:${date}:${hour}`, JSON.stringify({ consumptionKwh: microsToDecimal(existing.consumption_micros), comment: existing.comment }), existing.comment, now),
     ]);
+    await enqueueRecalculation(db, { from: { date: left.reading_date, hour: left.reading_hour }, to: previousSlot({ date: right.reading_date, hour: right.reading_hour }), reason: "MANUAL_CONSUMPTION", comment: existing.comment || "Удалено ручное значение" });
     return new Response(null, { status: 204 });
   } catch (error) {
     return errorResponse(error);

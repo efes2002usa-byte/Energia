@@ -1,5 +1,6 @@
 import { MAIN_METER_ID, ReadingRow, ValidationError, ensureMainMeter, errorResponse, getD1, parseDecimalToMicros, readingDto, validateDate, validateHour, validateManualInterval } from "@/lib/energy-db";
 import { assertRangeEditable } from "@/lib/day-workflow";
+import { enqueueRecalculation, previousSlot } from "@/lib/recalculation-jobs";
 
 export async function GET() {
   try {
@@ -68,6 +69,11 @@ export async function POST(request: Request) {
         VALUES (?, 'METER_READING', ?, 'CREATE', ?, ?, 'ADMIN', ?)
       `).bind(crypto.randomUUID(), id, JSON.stringify({ date, hour, valueKwh: payload.valueKwh }), comment, now),
     ]);
+    if (previous || next) await enqueueRecalculation(db, {
+      from: previous ? { date: previous.reading_date, hour: previous.reading_hour } : { date, hour },
+      to: previousSlot(next ? { date: next.reading_date, hour: next.reading_hour } : { date, hour }),
+      reason: "METER_READING", comment: comment || "Добавлено показание",
+    });
 
     const row = await db.prepare(`
       SELECT id, meter_id, reading_date, reading_hour, value_micros, comment, created_at, updated_at

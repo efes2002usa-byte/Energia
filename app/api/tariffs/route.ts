@@ -1,4 +1,5 @@
 import { errorResponse, getD1, microsToDecimal, parseDecimalToMicros, validateDate, ValidationError } from "@/lib/energy-db";
+import { enqueueExistingRange, existingEditableEnd } from "@/lib/recalculation-jobs";
 
 type TariffRow = {
   id: string;
@@ -55,6 +56,7 @@ export async function POST(request: Request) {
     if (comment.length > 500) throw new ValidationError("COMMENT_TOO_LONG", "Комментарий должен быть не длиннее 500 символов");
 
     const db = getD1();
+    const affectedToDate = await existingEditableEnd(db, validFromDate);
     const existing = await db.prepare(`SELECT id FROM tariff_versions WHERE valid_from_date = ?`).bind(validFromDate).first<{ id: string }>();
     if (existing) throw new ValidationError("TARIFF_DATE_CONFLICT", "На эту дату уже существует версия тарифа", 409);
 
@@ -68,6 +70,7 @@ export async function POST(request: Request) {
         VALUES (?, 'TARIFF', ?, 'CREATE', ?, ?, 'ADMIN', ?)`)
         .bind(crypto.randomUUID(), id, afterData, comment, now),
     ]);
+    await enqueueExistingRange(db, validFromDate, "TARIFF", comment || "Добавлена версия тарифа", affectedToDate);
     return Response.json({ tariff: { id, validFromDate, pricePerKwh: microsToDecimal(priceMicros), comment, createdAt: now } }, { status: 201 });
   } catch (error) {
     return errorResponse(error);

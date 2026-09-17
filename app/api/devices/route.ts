@@ -1,5 +1,6 @@
 import { cleanName, deviceDto, DeviceRow, ensureReferenceData, getD1, parseConsumption, validateDate, validateHours, ValidationError } from "@/lib/device-db";
 import { errorResponse } from "@/lib/energy-db";
+import { enqueueExistingRange, existingEditableEnd } from "@/lib/recalculation-jobs";
 
 export async function GET() {
   try {
@@ -45,6 +46,7 @@ export async function POST(request: Request) {
     });
     const db = getD1();
     await ensureReferenceData(db);
+    const affectedToDate = await existingEditableEnd(db, activeFromDate);
     const [zone, category] = await Promise.all([
       db.prepare(`SELECT id FROM zones WHERE id = ? AND is_active = 1`).bind(zoneId).first<{ id: string }>(),
       db.prepare(`SELECT id FROM device_categories WHERE id = ? AND is_active = 1`).bind(categoryId).first<{ id: string }>(),
@@ -60,6 +62,7 @@ export async function POST(request: Request) {
       db.prepare(`INSERT INTO audit_log (id, entity_type, entity_id, action, after_data, comment, source, created_at) VALUES (?, 'DEVICE', ?, 'CREATE', ?, ?, 'ADMIN', ?)`).bind(crypto.randomUUID(), deviceId, JSON.stringify({ name, description, activeFromDate, zoneId, categoryId, consumption, schedule }), description, now),
     ];
     await db.batch(statements);
+    await enqueueExistingRange(db, activeFromDate, "DEVICE", description || "Создан прибор", affectedToDate);
     return Response.json({ id: deviceId }, { status: 201 });
   } catch (error) {
     return errorResponse(error);

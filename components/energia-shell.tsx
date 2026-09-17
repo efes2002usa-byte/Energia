@@ -1,8 +1,10 @@
+/* eslint-disable @next/next/no-html-link-for-pages */
 "use client";
 
 import type { ReactNode } from "react";
 import { usePathname } from "next/navigation";
 import {
+  Activity,
   BarChart3,
   Bolt,
   CalendarDays,
@@ -84,6 +86,11 @@ export function EnergiaShell({ children }: { children: ReactNode }) {
             <SidebarGroupLabel className="px-3 text-[0.68rem] uppercase tracking-[0.14em] text-white/35">Система</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild isActive={pathname === "/operations"} tooltip="Операции" className="h-10 rounded-xl px-3 text-[0.9rem] text-white/64 hover:bg-white/8 hover:text-white data-[active=true]:bg-[#f0b84c] data-[active=true]:font-semibold data-[active=true]:text-[#10283b]">
+                    <a href="/operations"><Activity aria-hidden="true" size={18} /><span>Операции</span></a>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
                 <SidebarMenuItem>
                   <SidebarMenuButton asChild isActive={pathname === "/settings"} tooltip="Настройки" className="h-10 rounded-xl px-3 text-[0.9rem] text-white/64 hover:bg-white/8 hover:text-white data-[active=true]:bg-[#f0b84c] data-[active=true]:font-semibold data-[active=true]:text-[#10283b]">
                     <a href="/settings"><Settings aria-hidden="true" size={18} /><span>Настройки</span></a>

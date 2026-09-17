@@ -25,7 +25,7 @@ function addDays(date: string, amount: number) {
   return value.toISOString().slice(0, 10);
 }
 
-function dateRange(from: string, to: string) {
+export function dateRange(from: string, to: string) {
   const dates: string[] = [];
   for (let date = from; date <= to; date = addDays(date, 1)) dates.push(date);
   return dates;
@@ -79,7 +79,7 @@ async function calculateInterval(db: D1Database, left: Reading, right: Reading) 
   return result;
 }
 
-async function buildCalculation(db: D1Database, from: string, to: string) {
+export async function buildCalculation(db: D1Database, from: string, to: string) {
   const appSettings = await getAppSettings(db);
   const absoluteToleranceMicros = appSettings.absolute_tolerance_micros;
   const percentTolerance = appSettings.percentage_tolerance_micros / 1_000_000;
@@ -168,9 +168,10 @@ async function buildCalculation(db: D1Database, from: string, to: string) {
     actualCost: totalActualCost === null ? null : microsToDecimal(totalActualCost), devicesCost: totalDevicesCost === null ? null : microsToDecimal(totalDevicesCost), unallocatedCost: totalUnallocatedCost === null ? null : microsToDecimal(totalUnallocatedCost) }, byZone: aggregate("zone"), byCategory: aggregate("category"), errors: [...new Set(errors)] };
 }
 
-async function persistCalculation(db: D1Database, calculation: Awaited<ReturnType<typeof buildCalculation>>) {
+export async function persistCalculation(db: D1Database, calculation: Awaited<ReturnType<typeof buildCalculation>>, options: { audit?: boolean; comment?: string; source?: "ADMIN" | "SYSTEM" } = {}) {
   const now = new Date().toISOString();
   for (const row of calculation.allRows) {
+    if (row.status === "CALCULATION_ERROR") continue;
     const statements = [db.prepare(`DELETE FROM device_hourly_energy WHERE date = ? AND hour = ?`).bind(row.date, row.hour)];
     for (const detail of row.details) statements.push(db.prepare(`INSERT INTO device_hourly_energy
       (device_id, date, hour, consumption_version_id, placement_version_id, zone_id, category_id, energy_micros, formula, calculated_at)
@@ -185,9 +186,11 @@ async function persistCalculation(db: D1Database, calculation: Awaited<ReturnTyp
       .bind(MAIN_METER_ID, row.date, row.hour, row.actualMicros, row.quality, row.devicesMicros, row.deltaMicros, row.status, row.errorMessage, now));
     await db.batch(statements);
   }
-  await db.prepare(`INSERT INTO audit_log (id, entity_type, entity_id, action, after_data, comment, source, created_at)
-    VALUES (?, 'RECALCULATION', ?, 'RECALCULATE', ?, ?, 'ADMIN', ?)`)
-    .bind(crypto.randomUUID(), `${calculation.from}:${calculation.to}`, JSON.stringify({ rows: calculation.allRows.length, errors: calculation.errors }), `Пересчёт ${calculation.from} — ${calculation.to}`, now).run();
+  if (options.audit !== false) {
+    await db.prepare(`INSERT INTO audit_log (id, entity_type, entity_id, action, after_data, comment, source, created_at)
+      VALUES (?, 'RECALCULATION', ?, 'RECALCULATE', ?, ?, ?, ?)`)
+      .bind(crypto.randomUUID(), `${calculation.from}:${calculation.to}`, JSON.stringify({ rows: calculation.allRows.length, errors: calculation.errors }), options.comment ?? `Пересчёт ${calculation.from} — ${calculation.to}`, options.source ?? "ADMIN", now).run();
+  }
 }
 
 export async function GET(request: Request) {

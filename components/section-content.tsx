@@ -17,8 +17,9 @@ import { DevicesPage as PersistentDevicesPage } from "@/components/devices-page"
 import { MeterPage } from "@/components/meter-page";
 import { ReconciliationPage as PersistentReconciliationPage } from "@/components/reconciliation-page";
 import { SettingsPage as PersistentSettingsPage } from "@/components/settings-page";
+import { OperationsPage } from "@/components/operations-page";
 
-export type Section = "today" | "calendar" | "devices" | "meter" | "reconciliation" | "analytics" | "settings";
+export type Section = "today" | "calendar" | "devices" | "meter" | "reconciliation" | "analytics" | "operations" | "settings";
 
 const fieldClass = "h-11 rounded-xl border border-[#d8e3e7] bg-white px-3 text-sm text-[#17374c] outline-none focus:border-[#1e7680]";
 
@@ -71,6 +72,7 @@ function LegacyReconciliationPage() {
   const [data, setData] = useState<{ summary: { actualKwh: string; devicesKwh: string; deltaKwh: string; coveragePercent: number }; rows: Array<{ date: string; hour: number; actualKwh: string | null; quality: string; devicesKwh: string; deltaKwh: string | null; status: string }>; errors: string[] } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { let cancelled = false; setLoading(true); setError(""); fetch(`/api/reconciliation?from=${from}&to=${to}`, { cache: "no-store" }).then(async response => { const body = await response.json() as { error?: { message?: string } }; if (!response.ok) throw new Error(body.error?.message || "Не удалось выполнить расчёт"); return body as unknown as typeof data; }).then(result => { if (!cancelled) setData(result); }).catch(requestError => { if (!cancelled) setError(requestError instanceof Error ? requestError.message : "Не удалось выполнить расчёт"); }).finally(() => { if (!cancelled) setLoading(false); }); return () => { cancelled = true; }; }, [from, to]);
   const summaryData = data?.summary ?? { actualKwh: "0", devicesKwh: "0", deltaKwh: "0", coveragePercent: 0 };
   const format = (value: string | null) => value === null ? "—" : Number(value).toLocaleString("ru-RU", { minimumFractionDigits: 3, maximumFractionDigits: 3 });
@@ -98,5 +100,6 @@ export function SectionContent({ section }: { section: Section }) {
   if (section === "meter") return <MeterPage />;
   if (section === "reconciliation") return <PersistentReconciliationPage />;
   if (section === "analytics") return <AnalyticsPage />;
+  if (section === "operations") return <OperationsPage />;
   return <PersistentSettingsPage />;
 }

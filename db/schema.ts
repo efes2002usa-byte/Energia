@@ -226,3 +226,24 @@ export const hourlyReconciliation = sqliteTable("hourly_reconciliation", {
   index("idx_hourly_reconciliation_date_status").on(table.date, table.status),
   index("idx_hourly_reconciliation_quality_date").on(table.actualQuality, table.date),
 ]);
+
+export const recalculationJobs = sqliteTable("recalculation_jobs", {
+  id: text("id").primaryKey(),
+  fromDate: text("from_date").notNull(),
+  fromHour: integer("from_hour").notNull(),
+  toDate: text("to_date").notNull(),
+  toHour: integer("to_hour").notNull(),
+  reason: text("reason").notNull(),
+  comment: text("comment").notNull().default(""),
+  status: text("status").notNull().default("PENDING"),
+  totalHours: integer("total_hours").notNull(),
+  processedHours: integer("processed_hours").notNull().default(0),
+  errorMessage: text("error_message").notNull().default(""),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  startedAt: text("started_at"),
+  completedAt: text("completed_at"),
+  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (table) => [
+  index("idx_recalculation_jobs_status_created").on(table.status, table.createdAt),
+  index("idx_recalculation_jobs_range").on(table.fromDate, table.toDate),
+]);

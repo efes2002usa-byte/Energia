@@ -1,5 +1,6 @@
 import { getD1, validateDate, ValidationError } from "@/lib/device-db";
 import { errorResponse } from "@/lib/energy-db";
+import { enqueueExistingRange, existingEditableEnd } from "@/lib/recalculation-jobs";
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -21,12 +22,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     if (!zone || !category) throw new ValidationError("REFERENCE_INACTIVE", "Зона или категория недоступна", 409);
     if (validFromDate < device.active_from_date) throw new ValidationError("INVALID_VERSION_DATE", "Версия не может начинаться раньше прибора");
     if (duplicate) throw new ValidationError("VERSION_DATE_EXISTS", "Версия размещения на эту дату уже существует", 409);
+    const affectedToDate = await existingEditableEnd(db, validFromDate);
     const versionId = crypto.randomUUID();
     const now = new Date().toISOString();
     await db.batch([
       db.prepare(`INSERT INTO device_placement_versions (id, device_id, valid_from_date, zone_id, category_id, comment, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`).bind(versionId, id, validFromDate, zoneId, categoryId, comment, now),
       db.prepare(`INSERT INTO audit_log (id, entity_type, entity_id, action, after_data, comment, source, created_at) VALUES (?, 'DEVICE_PLACEMENT_VERSION', ?, 'CREATE', ?, ?, 'ADMIN', ?)`).bind(crypto.randomUUID(), `${id}:${versionId}`, JSON.stringify({ validFromDate, zoneId, categoryId }), comment, now),
     ]);
+    await enqueueExistingRange(db, validFromDate, "PLACEMENT", comment || "Изменено размещение прибора", affectedToDate);
     return Response.json({ id: versionId }, { status: 201 });
   } catch (error) {
     return errorResponse(error);

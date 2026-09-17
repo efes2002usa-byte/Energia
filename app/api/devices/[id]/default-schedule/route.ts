@@ -1,11 +1,12 @@
 import { getD1, validateHours, ValidationError } from "@/lib/device-db";
 import { errorResponse } from "@/lib/energy-db";
+import { enqueueExistingRange, existingEditableEnd } from "@/lib/recalculation-jobs";
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
     const db = getD1();
-    const device = await db.prepare(`SELECT id FROM devices WHERE id = ?`).bind(id).first<{ id: string }>();
+    const device = await db.prepare(`SELECT id, active_from_date FROM devices WHERE id = ?`).bind(id).first<{ id: string; active_from_date: string }>();
     if (!device) throw new ValidationError("NOT_FOUND", "Прибор не найден", 404);
     const result = await db.prepare(`SELECT weekday, hour FROM device_default_schedule WHERE device_id = ? ORDER BY weekday, hour`).bind(id).all<{ weekday: number; hour: number }>();
     return Response.json({ schedule: Array.from({ length: 7 }, (_, index) => ({ weekday: index + 1, hours: result.results.filter(row => row.weekday === index + 1).map(row => row.hour) })) });
@@ -25,8 +26,9 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
       return { weekday, hours: validateHours(day.hours) };
     });
     const db = getD1();
-    const device = await db.prepare(`SELECT id FROM devices WHERE id = ?`).bind(id).first<{ id: string }>();
+    const device = await db.prepare(`SELECT id, active_from_date FROM devices WHERE id = ?`).bind(id).first<{ id: string; active_from_date: string }>();
     if (!device) throw new ValidationError("NOT_FOUND", "Прибор не найден", 404);
+    const affectedToDate = await existingEditableEnd(db, device.active_from_date);
     const before = await db.prepare(`SELECT weekday, hour FROM device_default_schedule WHERE device_id = ? ORDER BY weekday, hour`).bind(id).all<{ weekday: number; hour: number }>();
     const now = new Date().toISOString();
     await db.batch([
@@ -34,6 +36,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
       ...schedule.flatMap(day => day.hours.map(hour => db.prepare(`INSERT INTO device_default_schedule (device_id, weekday, hour) VALUES (?, ?, ?)`).bind(id, day.weekday, hour))),
       db.prepare(`INSERT INTO audit_log (id, entity_type, entity_id, action, before_data, after_data, comment, source, created_at) VALUES (?, 'DEVICE_DEFAULT_SCHEDULE', ?, 'REPLACE', ?, ?, 'Недельный шаблон', 'ADMIN', ?)`).bind(crypto.randomUUID(), id, JSON.stringify(before.results), JSON.stringify(schedule), now),
     ]);
+    await enqueueExistingRange(db, device.active_from_date, "CALENDAR", "Изменён недельный шаблон", affectedToDate);
     return Response.json({ schedule });
   } catch (error) {
     return errorResponse(error);

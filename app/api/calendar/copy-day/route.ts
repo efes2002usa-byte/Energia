@@ -2,6 +2,7 @@ import { buildCopyPlan, copySummary, executeCopy, validateDeviceIds } from "@/li
 import { validateDate, ValidationError } from "@/lib/device-db";
 import { errorResponse } from "@/lib/energy-db";
 import { assertDayEditable } from "@/lib/day-workflow";
+import { enqueueRecalculation } from "@/lib/recalculation-jobs";
 
 export async function POST(request: Request) {
   try {
@@ -16,6 +17,7 @@ export async function POST(request: Request) {
     await assertDayEditable(db, targetDate);
     if (!payload.overwrite && summary.conflicts.length > 0) return Response.json({ error: { code: "COPY_CONFLICT", message: "В целевой дате уже есть сохранённое расписание" }, ...summary }, { status: 409 });
     await executeCopy(db, plan, "COPY_DAY");
+    await enqueueRecalculation(db, { from: { date: targetDate, hour: 0 }, to: { date: targetDate, hour: 23 }, reason: "CALENDAR", comment: `Копирование расписания с ${sourceDate}` });
     return Response.json({ copied: true, ...summary });
   } catch (error) {
     return errorResponse(error);

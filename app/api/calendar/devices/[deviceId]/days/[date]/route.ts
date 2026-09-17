@@ -1,6 +1,7 @@
 import { getD1, validateDate, validateHours, ValidationError, weekdayForDate } from "@/lib/device-db";
 import { errorResponse } from "@/lib/energy-db";
 import { assertDayEditable } from "@/lib/day-workflow";
+import { enqueueRecalculation } from "@/lib/recalculation-jobs";
 
 export async function GET(_request: Request, { params }: { params: Promise<{ deviceId: string; date: string }> }) {
   try {
@@ -44,6 +45,9 @@ export async function PUT(request: Request, { params }: { params: Promise<{ devi
       ...hours.map(hour => db.prepare(`INSERT INTO device_on_hour (device_id, date, hour, source, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)`).bind(deviceId, date, hour, source, now, now)),
       db.prepare(`INSERT INTO audit_log (id, entity_type, entity_id, action, before_data, after_data, comment, source, created_at) VALUES (?, 'DEVICE_SCHEDULE_DAY', ?, 'REPLACE', ?, ?, ?, 'ADMIN', ?)`).bind(crypto.randomUUID(), `${deviceId}:${date}`, JSON.stringify(before.results.map(row => row.hour)), JSON.stringify(hours), source === "DEFAULT" ? "Применён недельный шаблон" : "Ручное расписание дня", now),
     ]);
+    const beforeHours = before.results.map(row => row.hour);
+    const changed = [...new Set([...beforeHours.filter(hour => !hours.includes(hour)), ...hours.filter(hour => !beforeHours.includes(hour))])].sort((a, b) => a - b);
+    if (changed.length) await enqueueRecalculation(db, { from: { date, hour: changed[0] }, to: { date, hour: changed.at(-1)! }, reason: "CALENDAR", comment: `Изменено расписание прибора ${deviceId}` });
     return Response.json({ deviceId, date, hours, source, isMaterialized: true });
   } catch (error) {
     return errorResponse(error);

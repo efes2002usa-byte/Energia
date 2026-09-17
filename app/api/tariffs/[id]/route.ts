@@ -1,4 +1,5 @@
 import { errorResponse, getD1, microsToDecimal, ValidationError } from "@/lib/energy-db";
+import { enqueueExistingRange, existingEditableEnd } from "@/lib/recalculation-jobs";
 
 type TariffRow = { id: string; valid_from_date: string; price_micros: number; comment: string; created_at: string };
 
@@ -15,6 +16,7 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
       WHERE date >= ? AND (? IS NULL OR date < ?) LIMIT 1`)
       .bind(tariff.valid_from_date, next?.valid_from_date ?? null, next?.valid_from_date ?? null).first<{ used: number }>();
     if (used) throw new ValidationError("TARIFF_IN_USE", "Использованный тариф нельзя удалить: история расчётов должна сохраниться", 409);
+    const affectedToDate = await existingEditableEnd(db, tariff.valid_from_date);
 
     const now = new Date().toISOString();
     await db.batch([
@@ -23,6 +25,7 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
         VALUES (?, 'TARIFF', ?, 'DELETE', ?, ?, 'ADMIN', ?)`)
         .bind(crypto.randomUUID(), id, JSON.stringify({ validFromDate: tariff.valid_from_date, pricePerKwh: microsToDecimal(tariff.price_micros) }), tariff.comment, now),
     ]);
+    await enqueueExistingRange(db, tariff.valid_from_date, "TARIFF", tariff.comment || "Удалена версия тарифа", affectedToDate);
     return Response.json({ deleted: true });
   } catch (error) {
     return errorResponse(error);
