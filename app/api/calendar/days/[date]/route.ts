@@ -15,11 +15,11 @@ export async function GET(_request: Request, { params }: { params: Promise<{ dat
     const devices = await Promise.all(ids.results.map(async ({ id }) => {
       const device = await getDevice(db, id, date);
       if (!device) return null;
-      const marker = await db.prepare(`SELECT source FROM device_schedule_days WHERE device_id = ? AND date = ?`).bind(id, date).first<{ source: string }>();
+      const marker = await db.prepare(`SELECT source, updated_at FROM device_schedule_days WHERE device_id = ? AND date = ?`).bind(id, date).first<{ source: string; updated_at: string }>();
       const slots = marker
         ? await db.prepare(`SELECT hour FROM device_on_hour WHERE device_id = ? AND date = ? ORDER BY hour`).bind(id, date).all<{ hour: number }>()
         : await db.prepare(`SELECT hour FROM device_default_schedule WHERE device_id = ? AND weekday = ? ORDER BY hour`).bind(id, weekday).all<{ hour: number }>();
-      return { ...deviceDto(device), hours: slots.results.map(row => row.hour), source: marker?.source ?? "DEFAULT_PREVIEW", isMaterialized: Boolean(marker) };
+      return { ...deviceDto(device), hours: slots.results.map(row => row.hour), source: marker?.source ?? "DEFAULT_PREVIEW", isMaterialized: Boolean(marker), updatedAt: marker?.updated_at ?? null };
     }));
     return Response.json({ date, weekday, devices: devices.filter(Boolean) });
   } catch (error) {

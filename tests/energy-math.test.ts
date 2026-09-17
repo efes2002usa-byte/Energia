@@ -35,6 +35,22 @@ test("manual hourly redistribution preserves the interval total", () => {
   assert.equal(distributeMicros(5_000_000, 2, new Map([[0, 3_000_000], [1, 3_000_000]])), null);
 });
 
+test("repeated redistribution is deterministic and idempotent", () => {
+  const manual = new Map([[2, 1_234_567]]);
+  const first = distributeMicros(9_876_543, 5, manual);
+  const second = distributeMicros(9_876_543, 5, manual);
+  assert.deepEqual(second, first);
+  assert.equal(first?.reduce((sum, value) => sum + value, 0), 9_876_543);
+});
+
+test("meter interval flows into hourly values and an aggregate total", () => {
+  const intervalHours = hoursBetween({ reading_date: "2026-09-15", reading_hour: 10 }, { reading_date: "2026-09-15", reading_hour: 14 });
+  const hourly = distributeMicros(40_000_000, intervalHours, new Map([[1, 16_000_000]]));
+  assert.equal(hourly?.length, 4);
+  assert.equal(hourly?.reduce((sum, value) => sum + value, 0), 40_000_000);
+  assert.equal(microsToDecimal(hourly?.reduce((sum, value) => sum + value, 0) ?? 0), "40.000000");
+});
+
 test("effective tariff selection chooses the latest version for a slot", () => {
   const tariffs = [{ valid_from_date: "2026-01-01", price: 300 }, { valid_from_date: "2026-09-01", price: 330 }, { valid_from_date: "2026-10-01", price: 345 }];
   assert.equal(selectEffectiveTariff(tariffs, "2026-09-15")?.price, 330);

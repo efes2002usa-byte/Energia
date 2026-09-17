@@ -2,6 +2,7 @@ import { buildCalculation, dateRange, persistCalculation } from "@/app/api/recon
 import { assertRangeEditable } from "@/lib/day-workflow";
 import { ensureReferenceData } from "@/lib/device-db";
 import { ensureMainMeter, slotDate, slotFromDate, validateDate, validateHour, ValidationError } from "@/lib/energy-db";
+import { elapsedMs, logMetric } from "@/lib/metrics";
 
 export type RecalculationReason = "CALENDAR" | "DEVICE" | "PLACEMENT" | "ARCHIVE" | "METER_READING" | "MANUAL_CONSUMPTION" | "TARIFF" | "MANUAL" | "MERGED";
 export type RecalculationSlot = { date: string; hour: number };
@@ -84,6 +85,7 @@ export async function enqueueRecalculation(db: D1Database, input: { from: Recalc
 }
 
 async function runJob(db: D1Database, job: RecalculationJobRow) {
+  const metricStartedAt = performance.now();
   const startedAt = new Date().toISOString();
   const claim = await db.prepare(`UPDATE recalculation_jobs SET status = 'RUNNING', started_at = ?, updated_at = ? WHERE id = ? AND status = 'PENDING'`).bind(startedAt, startedAt, job.id).run();
   if (!claim.meta.changes) return;
@@ -110,10 +112,12 @@ async function runJob(db: D1Database, job: RecalculationJobRow) {
       db.prepare(`UPDATE recalculation_jobs SET status = ?, processed_hours = ?, error_message = ?, completed_at = ?, updated_at = ? WHERE id = ?`).bind(status, processed, errorMessage, completedAt, completedAt, job.id),
       db.prepare(`INSERT INTO audit_log (id, entity_type, entity_id, action, after_data, comment, source, created_at) VALUES (?, 'RECALCULATION_JOB', ?, 'RECALCULATE', ?, ?, ?, ?)`).bind(crypto.randomUUID(), job.id, JSON.stringify({ from: { date: job.from_date, hour: job.from_hour }, to: { date: job.to_date, hour: job.to_hour }, status, processedHours: processed, errors: uniqueErrors }), job.comment || `Пересчёт: ${job.reason}`, job.reason === "MANUAL" ? "ADMIN" : "SYSTEM", completedAt),
     ]);
+    logMetric("recalculation.duration", { jobId: job.id, status, durationMs: elapsedMs(metricStartedAt), processedHours: processed });
   } catch (error) {
     const completedAt = new Date().toISOString();
     const message = error instanceof Error ? error.message : "Неизвестная ошибка пересчёта";
     await db.prepare(`UPDATE recalculation_jobs SET status = 'FAILED', processed_hours = ?, error_message = ?, completed_at = ?, updated_at = ? WHERE id = ?`).bind(processed, message.slice(0, 4000), completedAt, completedAt, job.id).run();
+    logMetric("recalculation.duration", { jobId: job.id, status: "FAILED", durationMs: elapsedMs(metricStartedAt), processedHours: processed });
   }
 }
 

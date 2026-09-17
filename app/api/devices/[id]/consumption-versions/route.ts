@@ -2,6 +2,17 @@ import { getD1, parseConsumption, validateDate, ValidationError } from "@/lib/de
 import { errorResponse } from "@/lib/energy-db";
 import { enqueueExistingRange, existingEditableEnd } from "@/lib/recalculation-jobs";
 
+export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const { id } = await params;
+    const db = getD1();
+    const rows = await db.prepare(`SELECT id, valid_from_date, mode, consumption_per_hour_micros, nominal_power_micros, load_factor_ppm, quantity, comment, created_at FROM device_consumption_versions WHERE device_id = ? ORDER BY valid_from_date DESC`).bind(id).all<any>();
+    return Response.json({ versions: rows.results.map(row => ({ id: row.id, validFromDate: row.valid_from_date, mode: row.mode, consumptionPerHourKwh: row.consumption_per_hour_micros == null ? null : String(row.consumption_per_hour_micros / 1_000_000), nominalPowerKw: row.nominal_power_micros == null ? null : String(row.nominal_power_micros / 1_000_000), loadFactor: row.load_factor_ppm == null ? null : String(row.load_factor_ppm / 1_000_000), quantity: row.quantity, comment: row.comment, createdAt: row.created_at })) });
+  } catch (error) {
+    return errorResponse(error);
+  }
+}
+
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;

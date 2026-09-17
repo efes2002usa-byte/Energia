@@ -2,6 +2,17 @@ import { getD1, validateDate, ValidationError } from "@/lib/device-db";
 import { errorResponse } from "@/lib/energy-db";
 import { enqueueExistingRange, existingEditableEnd } from "@/lib/recalculation-jobs";
 
+export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const { id } = await params;
+    const db = getD1();
+    const rows = await db.prepare(`SELECT pv.id, pv.valid_from_date, pv.zone_id, z.name AS zone_name, pv.category_id, c.name AS category_name, pv.comment, pv.created_at FROM device_placement_versions pv JOIN zones z ON z.id = pv.zone_id JOIN device_categories c ON c.id = pv.category_id WHERE pv.device_id = ? ORDER BY pv.valid_from_date DESC`).bind(id).all<any>();
+    return Response.json({ versions: rows.results.map(row => ({ id: row.id, validFromDate: row.valid_from_date, zone: { id: row.zone_id, name: row.zone_name }, category: { id: row.category_id, name: row.category_name }, comment: row.comment, createdAt: row.created_at })) });
+  } catch (error) {
+    return errorResponse(error);
+  }
+}
+
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;

@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 
 type CalendarDevice = {
   id: string; name: string; description: string; zone: { id: string; name: string }; category: { id: string; name: string };
-  hours: number[]; source: string; isMaterialized: boolean; isArchived: boolean;
+  hours: number[]; source: string; isMaterialized: boolean; isArchived: boolean; updatedAt: string | null;
 };
 type CopyPreview = { deviceCount: number; dayCount: number; hourCount: number; conflicts: Array<{ deviceId: string; date: string }> };
 type DayStatus = "EMPTY" | "CALCULATED" | "FILLED" | "RECONCILED" | "CONFIRMED";
@@ -127,7 +127,7 @@ export function CalendarPage() {
     if (day?.status === "CONFIRMED") { setError("Подтверждённый день защищён. Сначала разблокируйте его"); return; }
     setSaving(deviceId); setError("");
     try {
-      const result = await fetch(`/api/calendar/devices/${deviceId}/days/${date}`, { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ hours: drafts[deviceId] ?? [], source }) }).then(json<{ hours: number[] }>);
+      const result = await fetch(`/api/calendar/devices/${deviceId}/days/${date}`, { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ hours: drafts[deviceId] ?? [], source, expectedUpdatedAt: devices.find(item => item.id === deviceId)?.updatedAt }) }).then(json<{ hours: number[] }>);
       setDrafts(current => ({ ...current, [deviceId]: result.hours }));
       setDirty(current => { const next = new Set(current); next.delete(deviceId); return next; });
       setDevices(current => current.map(device => device.id === deviceId ? { ...device, hours: result.hours, source, isMaterialized: true } : device));
